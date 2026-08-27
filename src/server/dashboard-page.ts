@@ -178,6 +178,9 @@ export function renderDashboard(
   .copy:hover { background:#f4f4f4; }
   .copy.done { color:#15803d; border-color:#22a447; }
   .empty { color:#999; font-size:13px; }
+  .scan { background:#15803d; color:#fff; border-color:#15803d; cursor:pointer; }
+  .scan:disabled { background:#9ccbaa; border-color:#9ccbaa; cursor:default; }
+  .scan-status { font-size:12px; color:#666; }
   .note { padding:12px 22px; color:#9a6b00; background:#fff8e6; border-top:1px solid #f0e0b0; font-size:13px; }
 </style>
 </head>
@@ -201,6 +204,8 @@ export function renderDashboard(
     ${STATUSES.map((s) => option(s, filters.status)).join('')}
   </select>
   <button type="submit">Lọc</button>
+  <button type="button" id="scan-btn" class="scan">Quét ngay</button>
+  <span id="scan-status" class="scan-status"></span>
   <a class="btn" href="/export?format=csv${exportQuery ? '&' + exportQuery : ''}">Tải CSV</a>
   <a class="btn primary" href="/export?format=xlsx${exportQuery ? '&' + exportQuery : ''}">Tải Excel</a>
 </form>
@@ -217,6 +222,53 @@ ${
 }
 
 <script>
+  // The scan takes about 100 seconds, so the button starts it and the page
+  // polls. Showing a spinner on a request that is still open would be a lie
+  // about where the work is happening.
+  (function () {
+    var btn = document.getElementById('scan-btn');
+    var out = document.getElementById('scan-status');
+    if (!btn || !out) return;
+    var timer = null;
+
+    function describe(state) {
+      if (state.running) return 'Đang quét… (khoảng 100 giây)';
+      if (!state.last) return '';
+      var l = state.last;
+      if (!l.ok) return 'Lần quét trước LỖI: ' + (l.error || 'không rõ');
+      var secs = Math.round(l.durationMs / 1000);
+      return 'Xong sau ' + secs + 's · ' + l.scanned + ' sản phẩm · ' +
+        (l.changes + l.listingChanges) + ' thay đổi. Tải lại trang để xem.';
+    }
+
+    function render(state) {
+      btn.disabled = state.running;
+      btn.textContent = state.running ? 'Đang quét…' : 'Quét ngay';
+      out.textContent = describe(state);
+      if (!state.running && timer) { clearInterval(timer); timer = null; }
+    }
+
+    function poll() {
+      fetch('/api/scan/status').then(function (r) { return r.json(); }).then(render).catch(function () {});
+    }
+
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      out.textContent = 'Đang bắt đầu…';
+      fetch('/api/scan', { method: 'POST' })
+        .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
+        .then(function (r) {
+          if (r.status === 409) out.textContent = 'Đã có một lần quét đang chạy.';
+          render(r.body.state);
+          if (!timer) timer = setInterval(poll, 3000);
+        })
+        .catch(function () { btn.disabled = false; out.textContent = 'Không gọi được máy chủ.'; });
+    });
+
+    // A scan may already be running when the page loads.
+    poll();
+  })();
+
   // Copies the same string the line displays. The text lives in a data
   // attribute built server-side, so what is copied and what is read can never
   // drift apart.

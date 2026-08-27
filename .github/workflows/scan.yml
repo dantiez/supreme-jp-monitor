@@ -1,22 +1,21 @@
 name: Supreme JP stock scan
 
-# The scheduler lives here rather than in the Render service on purpose: a free
-# Render instance sleeps after 15 minutes of no traffic, and a sleeping instance
-# runs no cron. Actions fires regardless of whether anything else is awake.
+# Manual only. Scanning is normally triggered from the dashboard button; this
+# workflow exists for running a scan when the dashboard is not up.
 #
-# Two cadences, matching the requirement's split between discovery and stock:
-#   - stock check every 2 hours, capped, to catch restocks
-#   - full sweep once a day, uncapped, to catch new products
+# NO SCHEDULE. The customer asked for scanning to happen on a button in the
+# dashboard rather than automatically, so the cron triggers are removed rather
+# than left commented out where they would look active.
 #
-# Times are UTC. Supreme JP drops on Thursday mornings JST (Wednesday ~23:00
-# UTC), which the 2-hourly cadence already covers.
-
+# What that costs, recorded here because it is not obvious from the code: while
+# nobody clicks, nothing is watched. A size that returns at 03:00 and sells out
+# by 05:00 is never seen and never enters the history, because no scan ran
+# between those two moments. Restoring automatic cover means putting the
+# `schedule:` block back.
+#
+# Manual dispatch stays: it is useful for running a scan without the dashboard
+# up, and it costs nothing while unused.
 on:
-  schedule:
-    # Stock check: every 2 hours.
-    - cron: '0 */2 * * *'
-    # Full sweep: 22:00 UTC daily (07:00 JST, before the shop opens).
-    - cron: '0 22 * * *'
   workflow_dispatch:
     inputs:
       max_products:

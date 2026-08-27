@@ -15,6 +15,7 @@ import {
 } from './export-writer.js';
 import { renderDashboard } from './dashboard-page.js';
 import { renderChangesPage } from './changes-page.js';
+import { startScan, getScanState } from './scan-controller.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3100);
@@ -37,6 +38,26 @@ function readFilters(query: Record<string, unknown>) {
     category: category || undefined
   };
 }
+
+// The scan is triggered from the dashboard button rather than a schedule.
+//
+// NOTE THE TRADE-OFF THIS ENCODES: nothing is monitored while nobody clicks. A
+// size that returns at 03:00 and sells out by 05:00 is never seen, and never
+// enters the history either, because no scan ran between those moments. That
+// was the customer's call, made knowingly.
+app.post('/api/scan', express.json(), (_req, res) => {
+  const result = startScan();
+  if (!result.started) {
+    // Refused, not queued: a queued scan would run against state the first one
+    // is still writing, and report its own predecessor's work as changes.
+    return res.status(409).json({ ok: false, reason: result.reason, state: getScanState() });
+  }
+  res.status(202).json({ ok: true, state: getScanState() });
+});
+
+app.get('/api/scan/status', (_req, res) => {
+  res.json(getScanState());
+});
 
 app.get('/healthz', (_req, res) => {
   res.status(200).send('ok');

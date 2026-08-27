@@ -69,17 +69,17 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 
 ---
 
-## Scheduling
+## Scanning is manual
 
-`.github/workflows/scan.yml` runs the scan on GitHub Actions, **not** on the web host. A free Render instance sleeps after 15 minutes of no traffic, and a sleeping instance runs no cron; Actions fires regardless of whether anything else is awake.
+**There is no schedule.** A scan runs when someone presses **Quét ngay** on the dashboard, and at no other time.
 
-- **Every 2 hours** — stock check, capped at 400 products
-- **22:00 UTC daily** — full sweep, uncapped, catches new products
-- **Manual** — `workflow_dispatch` with an optional cap and a notify toggle
+**What that costs:** while nobody clicks, nothing is watched. A size that returns at 03:00 and sells out by 05:00 is never seen — and never enters the history either, because no scan ran between those two moments. The tool is an on-demand checker rather than a monitor. That was a deliberate choice; restoring automatic cover means putting the `schedule:` block back in `.github/workflows/scan.yml`.
 
-Secrets required on the repo: `DATABASE_URL`, `DISCORD_WEBHOOK_URL`.
+The button starts the work and returns immediately; the page polls, because a full read takes roughly 100 seconds and holding a request open that long invites the browser or a proxy to give up while the scan carries on writing.
 
-Runs are serialised (`concurrency: supreme-scan`). Two overlapping scans would compare against a half-written "before" and report the other run's writes as changes.
+**One scan at a time.** A second click during a run is refused, not queued — a queued scan would compare against state the first one is still writing and report its predecessor's work as changes.
+
+`workflow_dispatch` still exists in the workflow for running a scan without the dashboard up. It needs `DATABASE_URL` and `DISCORD_WEBHOOK_URL` as repo secrets.
 
 ---
 
