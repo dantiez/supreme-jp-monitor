@@ -1,0 +1,62 @@
+name: Supreme JP stock scan
+
+# The scheduler lives here rather than in the Render service on purpose: a free
+# Render instance sleeps after 15 minutes of no traffic, and a sleeping instance
+# runs no cron. Actions fires regardless of whether anything else is awake.
+#
+# Two cadences, matching the requirement's split between discovery and stock:
+#   - stock check every 2 hours, capped, to catch restocks
+#   - full sweep once a day, uncapped, to catch new products
+#
+# Times are UTC. Supreme JP drops on Thursday mornings JST (Wednesday ~23:00
+# UTC), which the 2-hourly cadence already covers.
+
+on:
+  schedule:
+    # Stock check: every 2 hours.
+    - cron: '0 */2 * * *'
+    # Full sweep: 22:00 UTC daily (07:00 JST, before the shop opens).
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+    inputs:
+      max_products:
+        description: 'Cap products checked (blank = no cap)'
+        required: false
+      notify:
+        description: 'Send the Discord alert'
+        type: boolean
+        default: true
+
+concurrency:
+  # Two overlapping scans would compare against a half-written "before" and
+  # report changes that are really just the other run's writes.
+  group: supreme-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run scan
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # The hourly run is a stock check: cap it so it finishes well inside
+          # the two-hour window. The daily run sweeps everything.
+          SCAN_ARGS: >-
+            ${{ github.event_name == 'workflow_dispatch'
+                && (inputs.max_products && format('--max={0}', inputs.max_products) || '')
+                || (github.event.schedule == '0 22 * * *' && '' || '--max=400') }}
+          NOTIFY_FLAG: >-
+            ${{ github.event_name == 'workflow_dispatch' && inputs.notify == false && '--no-notify' || '' }}
+        run: npm run scan -- $SCAN_ARGS $NOTIFY_FLAG

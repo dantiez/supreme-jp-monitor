@@ -1,0 +1,59 @@
+// Entry point for the scheduled scan. This is what GitHub Actions invokes.
+//
+// It is a short-lived process on purpose: it opens the database, does one
+// sweep, alerts, and exits. Nothing here depends on a web server being awake,
+// which is exactly why the scheduler lives in Actions rather than in the
+// Render service -- a free Render instance sleeps, and a sleeping instance runs
+// no cron.
+//
+// Usage:
+//   npm run scan                       -- full sweep, notify
+//   npm run scan -- --max=20           -- cap the product count
+//   npm run scan -- --no-notify        -- store changes, stay silent
+//   npm run scan -- --collections=new  -- restrict discovery
+
+import 'dotenv/config';
+import { runScan } from '../core/scan-runner.js';
+import { close } from '../db/database.js';
+
+function flag(name: string): string | undefined {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : undefined;
+}
+
+async function main(): Promise<void> {
+  const maxRaw = flag('max');
+  const collectionsRaw = flag('collections');
+
+  const started = Date.now();
+  const summary = await runScan({
+    maxProducts: maxRaw ? Number(maxRaw) : undefined,
+    collections: collectionsRaw ? collectionsRaw.split(',').map((c) => c.trim()) : undefined,
+    notify: !process.argv.includes('--no-notify')
+  });
+
+  const seconds = Math.round((Date.now() - started) / 1000);
+  const byEvent = new Map<string, number>();
+  for (const c of summary.changes) byEvent.set(c.event, (byEvent.get(c.event) ?? 0) + 1);
+
+  console.log(
+    `[scan] done in ${seconds}s: discovered ${summary.discovered}, ` +
+      `checked ${summary.scanned}, failed ${summary.failed}, changes ${summary.changes.length}`
+  );
+  for (const [event, n] of byEvent) console.log(`         ${event}: ${n}`);
+
+  // A scan where nothing could be read is a failure, not a quiet success --
+  // exit non-zero so the Actions run goes red instead of looking healthy.
+  if (summary.scanned === 0 && summary.discovered > 0) {
+    throw new Error('Discovered products but could not read any of them.');
+  }
+}
+
+main()
+  .then(() => close())
+  .then(() => process.exit(0))
+  .catch(async (e) => {
+    console.error('[scan] failed:', (e as Error).message);
+    await close().catch(() => {});
+    process.exit(1);
+  });
