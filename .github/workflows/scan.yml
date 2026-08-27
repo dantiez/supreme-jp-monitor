@@ -47,16 +47,35 @@ jobs:
 
       - run: npm ci
 
+      - name: Decide scan arguments
+        id: args
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          MAX: ${{ inputs.max_products }}
+          NOTIFY: ${{ inputs.notify }}
+        run: |
+          # Worked out in shell rather than a chained GitHub expression. The
+          # expression form read as `a && b || c || d` and silently produced
+          # --max=400 for a manual run with a blank cap, which is the opposite
+          # of what the input promises. Shell makes each branch visible.
+          ARGS=""
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            # Blank input means no cap, exactly as the field says.
+            [ -n "$MAX" ] && ARGS="--max=$MAX"
+            [ "$NOTIFY" = "false" ] && ARGS="$ARGS --no-notify"
+          elif [ "$SCHEDULE" = "0 22 * * *" ]; then
+            # Daily full sweep: uncapped, catches new products.
+            ARGS=""
+          else
+            # Two-hourly stock check: capped so it finishes inside the window.
+            ARGS="--max=400"
+          fi
+          echo "value=$ARGS" >> "$GITHUB_OUTPUT"
+          echo "scan args: ${ARGS:-(none)}"
+
       - name: Run scan
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          # The hourly run is a stock check: cap it so it finishes well inside
-          # the two-hour window. The daily run sweeps everything.
-          SCAN_ARGS: >-
-            ${{ github.event_name == 'workflow_dispatch'
-                && (inputs.max_products && format('--max={0}', inputs.max_products) || '')
-                || (github.event.schedule == '0 22 * * *' && '' || '--max=400') }}
-          NOTIFY_FLAG: >-
-            ${{ github.event_name == 'workflow_dispatch' && inputs.notify == false && '--no-notify' || '' }}
-        run: npm run scan -- $SCAN_ARGS $NOTIFY_FLAG
+        run: npm run scan -- ${{ steps.args.outputs.value }}
