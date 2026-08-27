@@ -56,8 +56,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --max=50` | Cap products checked (listing order is newest-first) |
 | `npm run scan -- --no-notify` | Record changes without posting |
 | `npm run scan -- --collections=new,jackets` | Restrict discovery |
-| `npm run dev` | Dashboard + export (local) |
-| `npm start` | Same, for a hosting platform |
+| `npm run dev` | Dashboard + export, on 127.0.0.1 only |
 | `npm test` | Vitest: 58 tests |
 | `npm run lint` | `tsc --noEmit` |
 
@@ -77,22 +76,15 @@ Runs are serialised (`concurrency: supreme-scan`). Two overlapping scans would c
 
 ---
 
-## Deploying the dashboard (optional)
+## Sharing
 
-**The monitor does not need a web host.** Scanning runs on GitHub Actions and alerts go to Discord; the dashboard only *reads* what the scan already stored. Deploy it if you want to browse and export from anywhere, and skip it otherwise.
+**Alerts are shared through Discord, not through the dashboard.** The webhook posts into a channel, so anyone invited to that channel gets every restock the moment it happens - no hosting, no accounts, no URL to hand out. For "is it back in stock yet", which is the question this tool exists to answer, that is the whole mechanism.
 
-Because nothing is scheduled here, **a free tier is enough** — a sleeping dashboard costs a slow first load and nothing else. Paying to keep it awake buys faster page loads, not extra capability. That separation is the whole reason the cron lives in Actions.
+The dashboard is **local only, by design**: `npm run dev` binds `127.0.0.1`, which means *this machine*. It is for browsing and exporting on the machine that runs it, and the URL cannot be handed to anyone - every computer's `127.0.0.1` points at itself.
 
-On Render: build `npm ci`, start `npm start`, and set:
+Making it reachable by someone else would mean a public host, and the dashboard has **no authentication**: the URL would be readable, and the export downloadable, by anyone holding it. The server warns at boot on a non-loopback bind unless `ALLOW_PUBLIC_DASHBOARD=1` acknowledges that. Add a password before that changes.
 
-| Variable | Value |
-|---|---|
-| `DATABASE_URL` | the Neon connection string |
-| `HOST` | `0.0.0.0` — the container is unreachable on loopback |
-
-`PORT` is injected. `DISCORD_WEBHOOK_URL` is **not** needed here; only the scanner posts.
-
-**The dashboard has no authentication.** On a public host, anyone with the URL can read it and download the export. The server warns loudly at boot unless `ALLOW_PUBLIC_DASHBOARD=1` acknowledges it. Add a password before exposing anything you would not publish.
+Nothing here is scheduled, so if it is ever hosted, a free tier is enough - the cron lives in GitHub Actions precisely so the web side can sleep.
 
 ---
 
