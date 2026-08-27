@@ -300,3 +300,30 @@ describe('listing changes reach Discord', () => {
     expect(d.color).toBe('Black');
   });
 });
+
+describe('the sold-out column reports the last scan', () => {
+  it('says so when the last scan found nothing', () => {
+    // The column lists current stock, not a diff, so it is never empty and the
+    // "nothing changed" news would otherwise have nowhere to appear.
+    const html = renderDashboard([row({ status: 'SOLD_OUT' })], [], {}, {
+      lastScanChanges: 0
+    });
+    expect(html).toContain('không có thay đổi nào');
+  });
+
+  it('stays quiet when the last scan did find something', () => {
+    const html = renderDashboard([row({ status: 'SOLD_OUT' })], [], {}, {
+      lastScanChanges: 4
+    });
+    expect(html).not.toContain('không có thay đổi nào');
+  });
+
+  it('stays quiet when nothing has been scanned yet', () => {
+    // "The last check found nothing" and "nothing has been checked" must not
+    // look the same; only one of them is reassuring.
+    const html = renderDashboard([row({ status: 'SOLD_OUT' })], [], {}, {
+      lastScanChanges: null
+    });
+    expect(html).not.toContain('không có thay đổi nào');
+  });
+});
