@@ -8,6 +8,7 @@
 
 import * as XLSX from 'xlsx';
 import { DashboardRow } from '../db/monitor-repository.js';
+import { formatWhen, timeZoneLabel } from '../format-time.js';
 
 export type ExportFormat = 'csv' | 'xlsx';
 
@@ -24,15 +25,9 @@ const HEADERS = [
   'Currency',
   'Status',
   'Latest Event',
-  'First Seen At',
-  'Last Checked At'
+  `First Seen At (${timeZoneLabel()})`,
+  `Last Checked At (${timeZoneLabel()})`
 ];
-
-function isoOrNull(value: string | null): Cell {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
 
 function toCells(row: DashboardRow): Cell[] {
   return [
@@ -51,8 +46,12 @@ function toCells(row: DashboardRow): Cell[] {
     row.currency,
     row.status,
     row.latest_event,
-    isoOrNull(row.first_seen_at),
-    isoOrNull(row.last_checked_at)
+    // Localised rather than ISO: the people opening this spreadsheet read
+    // Tokyo time, and a UTC stamp means doing the arithmetic in their head on
+    // every row. The zone is named in the column header so it stays
+    // unambiguous.
+    formatWhen(row.first_seen_at),
+    formatWhen(row.last_checked_at)
   ];
 }
 

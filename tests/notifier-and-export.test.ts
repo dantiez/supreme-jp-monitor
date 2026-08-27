@@ -16,6 +16,7 @@ import {
 } from '../src/server/export-writer.js';
 import { DashboardRow } from '../src/db/monitor-repository.js';
 import { escapeHtml, formatMoney, renderDashboard } from '../src/server/dashboard-page.js';
+import { formatWhen, timeZoneLabel } from '../src/format-time.js';
 
 function change(over: Partial<DetectedChange> = {}): DetectedChange {
   return {
@@ -150,6 +151,32 @@ describe('export', () => {
     expect(buildExportFilename('csv', new Date('2026-08-17T00:00:00Z'))).toBe(
       'supreme_jp_stock_20260817.csv'
     );
+  });
+});
+
+describe('timestamps are shown in the display zone', () => {
+  it('renders a UTC instant as Tokyo time', () => {
+    // Storage stays UTC; only the reading changes. 02:00Z is 11:00 JST.
+    process.env.DISPLAY_TIMEZONE = 'Asia/Tokyo';
+    expect(formatWhen('2026-08-27T02:00:00.000Z')).toBe('2026-08-27 11:00');
+    expect(timeZoneLabel()).toBe('GMT+9');
+  });
+
+  it('honours a different zone without touching what is stored', () => {
+    process.env.DISPLAY_TIMEZONE = 'Asia/Ho_Chi_Minh';
+    expect(formatWhen('2026-08-27T02:00:00.000Z')).toBe('2026-08-27 09:00');
+    process.env.DISPLAY_TIMEZONE = 'Asia/Tokyo';
+  });
+
+  it('shows an em dash for a missing or broken timestamp', () => {
+    // Never "Invalid Date", and never a silently wrong epoch.
+    expect(formatWhen(null)).toBe('—');
+    expect(formatWhen('not a date')).toBe('—');
+  });
+
+  it('names the zone in the export headers so a time is never ambiguous', () => {
+    const csv = generateCsv([row()]);
+    expect(csv.split('\r\n')[0]).toContain('First Seen At (GMT+9)');
   });
 });
 

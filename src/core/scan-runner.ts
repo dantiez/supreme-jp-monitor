@@ -9,10 +9,10 @@
 // news. A failed product is counted, left untouched in storage, and retried on
 // the next run -- never written as SOLD_OUT, which would fire a false alert.
 
-import { parseCollectionPage } from '../parsers/collection-page-parser.js';
-import { parseProductPage } from '../parsers/product-page-parser.js';
-import { fetchPage, collectionPath, productPath } from './supreme-client.js';
+import { parseCataloguePage } from '../parsers/catalogue-parser.js';
+import { fetchPage, collectionPath } from './supreme-client.js';
 import { detectChanges, DetectedChange } from './change-detector.js';
+import { ScrapedProduct } from '../types.js';
 import * as repo from '../db/monitor-repository.js';
 import { notifyChanges } from '../notify/discord-notifier.js';
 
@@ -51,48 +51,75 @@ export interface ScanSummary {
 }
 
 export interface DiscoveryResult {
-  handles: string[];
-  /** Collections that answered, with how many handles each contributed. */
-  succeeded: Array<{ collection: string; found: number }>;
-  failed: Array<{ collection: string; error: string }>;
+  /** Every product the catalogue declared, with its sizes and stock. */
+  products: ScrapedProduct[];
+  /** Pages that answered, with how many products each carried. */
+  pagesRead: number;
+  /** What the site says the catalogue holds. Null when it did not say. */
+  declaredTotal: number | null;
+  failed: Array<{ page: number; error: string }>;
 }
 
+/** One listing page carries at most this many; the rest need ?page=N. */
+const PAGE_SIZE = 250;
+
+/** Stop rather than page forever if the site keeps returning full pages. */
+const MAX_PAGES = 20;
+
 /**
- * Discover handles across the configured collections, de-duplicated.
+ * Read the whole catalogue.
  *
- * WHY THE PER-COLLECTION RESULT IS RETURNED RATHER THAN LOGGED AND FORGOTTEN:
- * a failed collection used to be a lone console.warn, so a run where the FIRST
- * collection failed still reported "ok" -- having quietly monitored whatever
- * collection came next. That happened in production: /collections/new timed
- * out, discovery fell through to jackets, and the alert announced thirty
- * "new products" that were simply the first jackets nobody had recorded yet.
- * Which collections answered is now part of the scan's result and its summary.
+ * Every product with every size and its stock flag arrives inside the listing
+ * payload, so this is two requests for ~268 products rather than one request
+ * per product. See catalogue-parser.ts for the verification against the
+ * individual product pages.
+ *
+ * Paging continues until the declared total is reached or a page comes back
+ * short. Stopping at page one silently dropped the last eighteen products,
+ * which is the failure mode this whole path was rebuilt to remove.
  */
-async function discoverHandles(collections: string[]): Promise<DiscoveryResult> {
-  const handles: string[] = [];
+async function readCatalogue(collection: string): Promise<DiscoveryResult> {
+  const products: ScrapedProduct[] = [];
   const seen = new Set<string>();
-  const succeeded: DiscoveryResult['succeeded'] = [];
   const failed: DiscoveryResult['failed'] = [];
+  let declaredTotal: number | null = null;
+  let pagesRead = 0;
 
-  for (const collection of collections) {
-    const res = await fetchPage(collectionPath(collection));
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const path = page === 1 ? collectionPath(collection) : `${collectionPath(collection)}?page=${page}`;
+    const res = await fetchPage(path);
+
     if (!res.ok) {
-      console.error(`[scan] FAILED collection "${collection}": ${res.error}`);
-      failed.push({ collection, error: res.error });
-      continue;
+      console.error(`[scan] FAILED listing page ${page}: ${res.error}`);
+      failed.push({ page, error: res.error });
+      break;
     }
 
-    let found = 0;
-    for (const handle of parseCollectionPage(res.html)) {
-      if (seen.has(handle)) continue;
-      seen.add(handle);
-      handles.push(handle);
-      found++;
+    const parsed = parseCataloguePage(res.html);
+    if (!parsed) {
+      // "Could not read" must never become "the catalogue is empty".
+      console.error(`[scan] FAILED to parse listing page ${page}`);
+      failed.push({ page, error: 'catalogue payload missing or unreadable' });
+      break;
     }
-    succeeded.push({ collection, found });
+
+    pagesRead++;
+    if (parsed.totalCount !== null) declaredTotal = parsed.totalCount;
+
+    for (const product of parsed.products) {
+      if (seen.has(product.handle)) continue;
+      seen.add(product.handle);
+      products.push(product);
+    }
+
+    console.log(`[scan] listing page ${page}: ${parsed.products.length} product(s)`);
+
+    // A short page is the last page. A full one means there is more to fetch.
+    if (parsed.products.length < PAGE_SIZE) break;
+    if (declaredTotal !== null && products.length >= declaredTotal) break;
   }
 
-  return { handles, succeeded, failed };
+  return { products, pagesRead, declaredTotal, failed };
 }
 
 export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
@@ -107,74 +134,53 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
     failed: 0,
     changes: [],
     discovered: 0,
-    discovery: { handles: [], succeeded: [], failed: [] }
+    discovery: { products: [], pagesRead: 0, declaredTotal: null, failed: [] }
   };
 
   try {
-    const discovery = await discoverHandles(collections);
-    const handles = discovery.handles;
+    const discovery = await readCatalogue(collections[0] ?? 'new');
     summary.discovery = discovery;
-    summary.discovered = handles.length;
+    summary.discovered = discovery.products.length;
 
-    for (const s of discovery.succeeded) {
-      console.log(`[scan] collection "${s.collection}": ${s.found} new handle(s)`);
+    if (discovery.products.length === 0) {
+      throw new Error(
+        `The catalogue could not be read (${discovery.failed
+          .map((f) => `page ${f.page}: ${f.error}`)
+          .join('; ') || 'no products returned'})`
+      );
     }
 
-    // Losing every collection means the scan looked at nothing. Reporting "ok"
-    // here would make a total outage indistinguishable from a quiet day.
-    if (discovery.succeeded.length === 0) {
-      throw new Error(
-        `No collection could be read (${discovery.failed
-          .map((f) => `${f.collection}: ${f.error}`)
-          .join('; ')})`
+    // The site states its own total. Reading fewer than it declares means
+    // products went unchecked, and a scan that quietly covers less than the
+    // shop holds is how a restock is never announced.
+    if (
+      discovery.declaredTotal !== null &&
+      discovery.products.length < discovery.declaredTotal
+    ) {
+      console.error(
+        `[scan] INCOMPLETE: read ${discovery.products.length} of ` +
+          `${discovery.declaredTotal} declared products.`
       );
     }
 
     const capped =
       options.maxProducts && options.maxProducts > 0
-        ? handles.slice(0, options.maxProducts)
-        : handles;
+        ? discovery.products.slice(0, options.maxProducts)
+        : discovery.products;
 
-    // A cap plus a missing collection is the dangerous combination: the run
-    // checks a full quota of products, none of which are the ones the failed
-    // collection would have supplied, and nothing about the totals looks wrong.
-    if (discovery.failed.length > 0) {
-      console.error(
-        `[scan] ${discovery.failed.length} collection(s) FAILED: ` +
-          discovery.failed.map((f) => f.collection).join(', ') +
-          '. Products they list were not checked this run.'
-      );
-    }
-
-    if (capped.length < handles.length) {
+    if (capped.length < discovery.products.length) {
       // Stated, never silent: a capped run that looked complete would make
       // "no changes" mean "we did not look".
-      console.log(`[scan] capped at ${capped.length} of ${handles.length} discovered products`);
+      console.log(`[scan] capped at ${capped.length} of ${discovery.products.length} products`);
     }
 
     // Loaded once, before the loop, so every product is compared against the
-    // same snapshot of "before" regardless of how long the scan takes.
+    // same snapshot of "before".
     const knownHandles = await repo.loadKnownHandles();
     const knownVariants = await repo.loadKnownVariants();
     const firstRun = knownHandles.size === 0;
 
-    for (const handle of capped) {
-      const res = await fetchPage(productPath(handle));
-      if (!res.ok) {
-        summary.failed++;
-        console.warn(`[scan] product "${handle}" failed: ${res.error}`);
-        continue;
-      }
-
-      const product = parseProductPage(res.html);
-      if (!product) {
-        // Parse failure is a failure, not an empty product. Storing it as
-        // "no sizes" would read as the whole product being delisted.
-        summary.failed++;
-        console.warn(`[scan] product "${handle}" could not be parsed`);
-        continue;
-      }
-
+    for (const product of capped) {
       const changes = detectChanges(product, knownHandles, knownVariants);
       await repo.saveProduct(product);
       await repo.recordChanges(changes);

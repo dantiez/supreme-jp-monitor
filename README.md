@@ -47,6 +47,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `DISCORD_WEBHOOK_URL` | no | Where alerts go. Without it, changes are still recorded |
 | `REQUEST_DELAY_MS` | no | Gap between requests, default 800ms |
 | `SCRAPER_USER_AGENT` | no | How the client identifies itself |
+| `DISPLAY_TIMEZONE` | no | Zone for displayed times. Default `Asia/Tokyo` |
 
 **The first run is silent by design.** It discovers the whole catalogue at once; announcing several hundred NEW_PRODUCTs would bury the channel and train the reader to ignore it before the first real restock ever arrives.
 
@@ -95,9 +96,10 @@ Nothing here is scheduled, so if it is ever hosted, a free tier is enough - the 
 ```
 src/
   types.ts                          data model; the colour decision is documented here
+  format-time.ts                    UTC storage -> display-zone text, one place
   parsers/
-    collection-page-parser.ts       listing HTML -> product handles
-    product-page-parser.ts          product HTML -> product + sizes + stock
+    catalogue-parser.ts             listing HTML -> the WHOLE catalogue
+    product-page-parser.ts          single product + the shared value helpers
   core/
     change-detector.ts              previous vs current -> events (the whole product)
     scan-runner.ts                  orchestration; per-product failure isolation
@@ -131,7 +133,8 @@ Columns: `Product Name · Product URL · Category · Color · Size · SKU · Pri
 
 ## Known gaps
 
-- **Discovery reads one collection, and that is enough.** Supreme ignores the collection path — `/collections/new`, `/collections/jackets` and `/collections/shoes` all return the same ~241 products with every product_type in them. So one request sees the whole catalogue and nothing can hide in an unlisted collection. Measured, not assumed; if Supreme ever starts honouring the path, `DEFAULT_COLLECTIONS` is where to add more.
+- **A scan is two requests, not 268.** The listing embeds `products-json`: every product with every size and its stock flag, verified field-for-field against the individual product pages. Page one holds 250, page two the remaining 18. The site declares its own total (`allProductsCount`) and the run fails if fewer are read, so a short scan cannot pass as a complete one.
+- **Times are displayed in Tokyo, stored in UTC.** `timestamptz` holds an absolute instant; only the reading is localised. Set `DISPLAY_TIMEZONE` (e.g. `Asia/Ho_Chi_Minh`) to change the frame. The zone is named in the dashboard and in the export headers so a timestamp is never ambiguous.
 - **No per-size history chart.** Every change is stored in `change_events`; nothing plots it yet.
 - **The dashboard has no auth.** Fine on loopback; it needs a password before it is exposed. The server warns at boot on a public bind.
 - **Alerts cap at 10 embeds per message**, with the overflow counted in the summary line rather than dropped silently.

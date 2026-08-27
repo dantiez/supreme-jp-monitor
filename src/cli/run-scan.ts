@@ -41,8 +41,10 @@ async function main(): Promise<void> {
       `checked ${summary.scanned}, failed ${summary.failed}, changes ${summary.changes.length}`
   );
   console.log(
-    `[scan] collections ok: ` +
-      (summary.discovery.succeeded.map((s) => s.collection).join(', ') || '(none)')
+    `[scan] listing pages read: ${summary.discovery.pagesRead}` +
+      (summary.discovery.declaredTotal !== null
+        ? ` (site declares ${summary.discovery.declaredTotal} products)`
+        : '')
   );
   for (const [event, n] of byEvent) console.log(`         ${event}: ${n}`);
 
@@ -60,9 +62,20 @@ async function main(): Promise<void> {
   // wonders why a drop was never announced.
   if (summary.discovery.failed.length > 0) {
     throw new Error(
-      `Collections could not be read: ` +
-        summary.discovery.failed.map((f) => `${f.collection} (${f.error})`).join(', ') +
+      `Listing pages could not be read: ` +
+        summary.discovery.failed.map((f) => `page ${f.page} (${f.error})`).join(', ') +
         `. Their products were NOT checked; results are incomplete.`
+    );
+  }
+
+  // The site states its own total. Covering less than it declares means
+  // products went unchecked this run, and silence about them would read as
+  // "nothing changed" rather than "we did not look".
+  const declared = summary.discovery.declaredTotal;
+  if (declared !== null && summary.discovered < declared) {
+    throw new Error(
+      `Read ${summary.discovered} products but the site declares ${declared}. ` +
+        `${declared - summary.discovered} were NOT checked.`
     );
   }
 }

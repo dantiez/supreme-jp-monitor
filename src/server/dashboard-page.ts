@@ -5,6 +5,7 @@
 // product names come from a third party and land directly in HTML.
 
 import { DashboardRow } from '../db/monitor-repository.js';
+import { formatWhen, timeZoneLabel } from '../format-time.js';
 
 /**
  * Escape before interpolation. Product names and colours are third-party text;
@@ -36,12 +37,6 @@ export function formatMoney(value: number | null, currency: string | null): stri
   return currency ? `${amount} ${currency}` : amount;
 }
 
-function formatWhen(iso: string | null): string {
-  if (!iso) return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toISOString().replace('T', ' ').slice(0, 16);
-}
 
 const STATUS_CLASS: Record<string, string> = {
   AVAILABLE: 'ok',
@@ -124,7 +119,7 @@ export function renderDashboard(
 <body>
 <header>
   <h1>Supreme JP Stock Monitor</h1>
-  <div class="sub">${rows.length} tracked size(s) &middot; ${available} available &middot; tracked as Product + Size, colour is a product attribute</div>
+  <div class="sub">${rows.length} tracked size(s) &middot; ${available} available &middot; tracked as Product + Size, colour is a product attribute &middot; times in ${escapeHtml(timeZoneLabel())}</div>
 </header>
 <main>
   <form method="get">
@@ -158,7 +153,7 @@ export function renderDashboard(
     rows.length === 0
       ? '<div class="empty">Nothing tracked yet. Run <code>npm run scan</code> to populate.</div>'
       : `<table>
-  <thead><tr><th>Product</th><th>Color</th><th>Size</th><th class="num">Price</th><th>Status</th><th>Latest event</th><th>Last checked</th></tr></thead>
+  <thead><tr><th>Product</th><th>Color</th><th>Size</th><th class="num">Price</th><th>Status</th><th>Latest event</th><th>Last checked (${escapeHtml(timeZoneLabel())})</th></tr></thead>
   <tbody>
 ${body}
   </tbody>

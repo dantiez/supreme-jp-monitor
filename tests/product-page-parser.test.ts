@@ -15,7 +15,7 @@ import {
   toStatus,
   parseCurrency
 } from '../src/parsers/product-page-parser.js';
-import { parseCollectionPage } from '../src/parsers/collection-page-parser.js';
+import { parseCataloguePage } from '../src/parsers/catalogue-parser.js';
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const read = (name: string) => fs.readFileSync(path.join(FIXTURES, name), 'utf8');
@@ -168,43 +168,42 @@ describe('parseProductPage failure handling', () => {
   });
 });
 
-describe('parseCollectionPage on real Supreme HTML', () => {
-  const handles = parseCollectionPage(read('collection-new.html'));
+describe('parseCataloguePage on real Supreme HTML', () => {
+  const page = parseCataloguePage(read('collection-new.html'));
 
-  it('finds the products the listing renders server-side', () => {
-    expect(handles.length).toBeGreaterThan(100);
+  it('reads every product the listing declares, with its sizes', () => {
+    // The listing embeds the whole catalogue -- product, colour, and each size
+    // with its own stock flag -- so a scan needs no per-product requests.
+    expect(page).not.toBeNull();
+    expect(page!.products.length).toBeGreaterThan(200);
+    expect(page!.products.every((p) => p.handle.length > 0)).toBe(true);
   });
 
-  it('returns each handle once', () => {
-    expect(new Set(handles).size).toBe(handles.length);
+  it('reports the total the site declares, so a short read is detectable', () => {
+    // One page holds at most 250. Without this number, stopping early looks
+    // exactly like a complete scan.
+    expect(page!.totalCount).toBeGreaterThanOrEqual(page!.products.length);
   });
 
-  it('preserves listing order, so a capped scan gets the newest drops first', () => {
-    const html = '<a href="/products/zzz-aaa"><a href="/products/aaa-bbb">';
-    expect(parseCollectionPage(html)).toEqual(['zzz-aaa', 'aaa-bbb']);
+  it('carries colour as a product attribute and stock per size', () => {
+    const withSizes = page!.products.find((p) => p.variants.length > 1)!;
+    expect(withSizes.variants.every((v) => v.size.length > 0)).toBe(true);
+    expect(
+      withSizes.variants.every((v) =>
+        ['AVAILABLE', 'SOLD_OUT', 'UNKNOWN'].includes(v.status)
+      )
+    ).toBe(true);
   });
 
-  it('ignores non-product paths', () => {
-    expect(parseCollectionPage('<a href="/collections/new">')).toEqual([]);
+  it('returns null when the payload is absent, never an empty catalogue', () => {
+    // An empty result would read as every product in the shop being delisted.
+    expect(parseCataloguePage('<html></html>')).toBeNull();
+    expect(parseCataloguePage('')).toBeNull();
   });
 
-  it('keeps underscores in handles instead of truncating at them', () => {
-    // Regression. Supreme handles look like `tja_r0zpybduuieh`. A character
-    // class without `_` does not skip those products -- it silently truncates
-    // them to `tja`, which looks like a valid handle and 404s on every scan.
-    expect(parseCollectionPage('<a href="/products/tja_r0zpybduuieh">')).toEqual([
-      'tja_r0zpybduuieh'
-    ]);
-  });
-
-  it('extracts exactly the handles the page declares', () => {
-    // Ground truth: the listing's embedded JSON carries a "handle" field for
-    // every product. Path extraction must agree with it exactly -- one short is
-    // a product never checked, one extra is a guaranteed 404.
-    const html = read('collection-new.html');
-    const declared = new Set(
-      [...html.matchAll(/"handle":"([a-z0-9][a-z0-9_-]+)"/g)].map((m) => m[1]!)
-    );
-    expect(new Set(handles)).toEqual(declared);
+  it('returns null on malformed JSON', () => {
+    expect(
+      parseCataloguePage('<script type="application/json" id="products-json">{oops</script>')
+    ).toBeNull();
   });
 });
