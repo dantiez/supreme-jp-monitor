@@ -20,10 +20,20 @@ export function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
-/** Unknown price renders as an em dash, never as 0. */
-export function formatYen(value: number | null): string {
+/**
+ * Unknown price renders as an em dash, never as 0.
+ *
+ * The currency comes from the row, never from an assumption: jp.supreme.com
+ * sometimes serves the US store, and printing $148 as "¥148" is the same
+ * defect as a column headed JPY holding dollars. A price whose currency is
+ * unknown is shown bare, so nobody reads a symbol that was never established.
+ */
+export function formatMoney(value: number | null, currency: string | null): string {
   if (value === null || value === undefined) return '—';
-  return `¥${Number(value).toLocaleString('en-US')}`;
+  const amount = Number(value).toLocaleString('en-US');
+  if (currency === 'JPY') return `¥${amount}`;
+  if (currency === 'USD') return `$${amount}`;
+  return currency ? `${amount} ${currency}` : amount;
 }
 
 function formatWhen(iso: string | null): string {
@@ -72,7 +82,7 @@ export function renderDashboard(
   <td><a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.name)}</a></td>
   <td>${escapeHtml(row.color)}</td>
   <td>${escapeHtml(row.size)}</td>
-  <td class="num">${formatYen(row.price_jpy)}</td>
+  <td class="num">${formatMoney(row.price, row.currency)}</td>
   <td><span class="pill ${STATUS_CLASS[row.status] ?? 'unknown'}">${escapeHtml(row.status)}</span></td>
   <td>${escapeHtml(row.latest_event ?? '')}</td>
   <td class="dim">${formatWhen(row.last_checked_at)}</td>

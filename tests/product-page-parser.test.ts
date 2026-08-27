@@ -11,8 +11,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import {
   parseProductPage,
-  toYen,
-  toStatus
+  toMajorUnits,
+  toStatus,
+  parseCurrency
 } from '../src/parsers/product-page-parser.js';
 import { parseCollectionPage } from '../src/parsers/collection-page-parser.js';
 
@@ -21,21 +22,21 @@ const read = (name: string) => fs.readFileSync(path.join(FIXTURES, name), 'utf8'
 
 const SHORTS = 'product-0-fow3-gelgp4at.html';
 
-describe('toYen', () => {
+describe('toMajorUnits', () => {
   it('converts Shopify minor units to whole yen', () => {
     // JPY has no minor unit, but Shopify still serves x100.
-    expect(toYen(2200000)).toBe(22000);
+    expect(toMajorUnits(2200000)).toBe(22000);
   });
 
   it('returns null for a missing price rather than 0', () => {
     // 0 is a claim about the product. Missing is not that claim.
-    expect(toYen(undefined)).toBeNull();
-    expect(toYen(null)).toBeNull();
-    expect(toYen('2200000')).toBeNull();
+    expect(toMajorUnits(undefined)).toBeNull();
+    expect(toMajorUnits(null)).toBeNull();
+    expect(toMajorUnits('2200000')).toBeNull();
   });
 
   it('keeps a genuine zero', () => {
-    expect(toYen(0)).toBe(0);
+    expect(toMajorUnits(0)).toBe(0);
   });
 });
 
@@ -97,13 +98,42 @@ describe('parseProductPage on real Supreme HTML', () => {
   });
 
   it('converts price to whole yen on every variant', () => {
-    expect(product!.variants.every((v) => v.priceJpy === 22000)).toBe(true);
+    expect(product!.variants.every((v) => v.price === 22000)).toBe(true);
   });
 
   it('builds an absolute product URL and https image URL', () => {
     expect(product!.url).toBe('https://jp.supreme.com/products/0-fow3-gelgp4at');
     // Shopify serves protocol-relative CDN paths.
     expect(product!.imageUrl?.startsWith('https://')).toBe(true);
+  });
+});
+
+describe('currency is read, never assumed', () => {
+  it('reads the currency the page declares', () => {
+    expect(parseCurrency(read(SHORTS))).toBe('JPY');
+  });
+
+  it('returns null when the page declares none', () => {
+    // Null means "we do not know what this number is". Defaulting to JPY is
+    // how $148 became a shirt apparently costing 148 yen.
+    expect(parseCurrency('<html></html>')).toBeNull();
+  });
+
+  it('reads USD when the US store answered', () => {
+    const usPage =
+      "<script>window.ShopifyAnalytics.meta.currency = 'USD';</script>" +
+      '<script type="application/json" id="product-x-json">' +
+      '{"handle":"x","title":"Oxford Shirt","variants":[' +
+      '{"public_title":"Large","price":14800,"available":true,"sku":"S"}]}</script>';
+    const p = parseProductPage(usPage);
+    // 14800 minor units is $148 -- and must never be shown as 148 yen.
+    expect(p!.variants[0]!.price).toBe(148);
+    expect(p!.variants[0]!.currency).toBe('USD');
+  });
+
+  it('stamps every variant with the page currency', () => {
+    const p = parseProductPage(read(SHORTS));
+    expect(p!.variants.every((v) => v.currency === 'JPY')).toBe(true);
   });
 });
 

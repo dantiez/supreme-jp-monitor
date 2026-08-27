@@ -19,8 +19,18 @@
 
 import { ScrapedProduct, ScrapedVariant, StockStatus } from '../types.js';
 
-/** Shopify serves money in minor units; JPY has none, so ¥22,000 arrives as 2200000. */
-const MINOR_UNITS_PER_YEN = 100;
+/** Shopify serves money in minor units; ¥22,000 arrives as 2200000. */
+const MINOR_UNITS = 100;
+
+/**
+ * The store's currency, as the page itself declares it.
+ *
+ * Read rather than assumed: jp.supreme.com sometimes answers with the US
+ * store, and treating those USD figures as yen turns $148 into a shirt
+ * apparently costing 148 yen. Same defect as labelling a column JPY while it
+ * holds dollars -- a wrong number wearing a confident label.
+ */
+const CURRENCY_RE = /ShopifyAnalytics\.meta\.currency\s*=\s*'([A-Z]{3})'/;
 
 const PRODUCT_JSON_RE =
   /<script[^>]*type="application\/json"[^>]*id="product-[^"]*-json"[^>]*>([\s\S]*?)<\/script>/i;
@@ -37,9 +47,15 @@ function textOrNull(v: unknown): string | null {
  * Returns null for anything non-numeric rather than 0: a price of zero is a
  * claim about the product, and a missing price is not that claim.
  */
-export function toYen(minorUnits: unknown): number | null {
+export function toMajorUnits(minorUnits: unknown): number | null {
   if (typeof minorUnits !== 'number' || !Number.isFinite(minorUnits)) return null;
-  return Math.round(minorUnits / MINOR_UNITS_PER_YEN);
+  return Math.round(minorUnits / MINOR_UNITS);
+}
+
+/** Currency the page declares, or null when it declares none. */
+export function parseCurrency(html: string): string | null {
+  const match = CURRENCY_RE.exec(html);
+  return match && match[1] ? match[1] : null;
 }
 
 /**
@@ -66,6 +82,7 @@ function absoluteImageUrl(raw: unknown): string | null {
  * which the caller must treat as "could not check", not as "nothing in stock".
  */
 export function parseProductPage(html: string): ScrapedProduct | null {
+  const currency = parseCurrency(html);
   const match = PRODUCT_JSON_RE.exec(html);
   if (!match || !match[1]) return null;
 
@@ -91,7 +108,8 @@ export function parseProductPage(html: string): ScrapedProduct | null {
           return {
             size,
             sku: textOrNull(v?.sku),
-            priceJpy: toYen(v?.price),
+            price: toMajorUnits(v?.price),
+            currency,
             status: toStatus(v?.available)
           };
         })

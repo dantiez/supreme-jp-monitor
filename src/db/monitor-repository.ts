@@ -29,9 +29,10 @@ export async function loadKnownVariants(): Promise<Map<string, KnownVariant>> {
   const res = await query<{
     handle: string;
     size: string;
-    price_jpy: number | null;
+    price: number | null;
+    currency: string | null;
     status: string;
-  }>('SELECT handle, size, price_jpy, status FROM supreme_monitor.variants');
+  }>('SELECT handle, size, price, currency, status FROM supreme_monitor.variants');
 
   const map = new Map<string, KnownVariant>();
   for (const row of res.rows) {
@@ -40,7 +41,8 @@ export async function loadKnownVariants(): Promise<Map<string, KnownVariant>> {
       size: row.size,
       // Postgres integer arrives as a JS number, but be explicit that null
       // survives as null rather than becoming 0.
-      priceJpy: row.price_jpy === null ? null : Number(row.price_jpy),
+      price: row.price === null ? null : Number(row.price),
+      currency: row.currency,
       status: row.status as StockStatus
     });
   }
@@ -86,14 +88,15 @@ export async function saveProduct(product: ScrapedProduct): Promise<void> {
 
     for (const variant of product.variants) {
       await client.query(
-        `INSERT INTO supreme_monitor.variants (handle, size, sku, price_jpy, status, last_checked_at)
-         VALUES ($1,$2,$3,$4,$5, now())
+        `INSERT INTO supreme_monitor.variants (handle, size, sku, price, currency, status, last_checked_at)
+         VALUES ($1,$2,$3,$4,$5,$6, now())
          ON CONFLICT (handle, size) DO UPDATE SET
            sku             = EXCLUDED.sku,
-           price_jpy       = EXCLUDED.price_jpy,
+           price           = EXCLUDED.price,
+           currency        = EXCLUDED.currency,
            status          = EXCLUDED.status,
            last_checked_at = now()`,
-        [product.handle, variant.size, variant.sku, variant.priceJpy, variant.status]
+        [product.handle, variant.size, variant.sku, variant.price, variant.currency, variant.status]
       );
     }
   });
@@ -107,16 +110,17 @@ export async function recordChanges(changes: DetectedChange[]): Promise<void> {
     for (const c of changes) {
       await client.query(
         `INSERT INTO supreme_monitor.change_events
-           (handle, size, event, previous_status, current_status, previous_price_jpy, current_price_jpy)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+           (handle, size, event, previous_status, current_status, previous_price, current_price, currency)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [
           c.handle,
           c.size,
           c.event,
           c.previousStatus,
           c.currentStatus,
-          c.previousPriceJpy,
-          c.currentPriceJpy
+          c.previousPrice,
+          c.currentPrice,
+          c.currency
         ]
       );
     }
@@ -157,7 +161,8 @@ export interface DashboardRow {
   category: string | null;
   size: string;
   sku: string | null;
-  price_jpy: number | null;
+  price: number | null;
+  currency: string | null;
   status: string;
   url: string;
   latest_event: string | null;
@@ -195,7 +200,7 @@ export async function loadDashboardRows(filters: {
   params.push(Math.min(Math.max(filters.limit ?? 2000, 1), 20000));
 
   const res = await query<DashboardRow>(
-    `SELECT p.handle, p.name, p.color, p.category, v.size, v.sku, v.price_jpy,
+    `SELECT p.handle, p.name, p.color, p.category, v.size, v.sku, v.price, v.currency,
             v.status, p.url, latest.event AS latest_event,
             latest.detected_at AS latest_event_at,
             v.first_seen_at, v.last_checked_at

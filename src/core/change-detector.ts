@@ -21,7 +21,9 @@ import { ChangeEvent, ScrapedProduct, ScrapedVariant, StockStatus } from '../typ
 export interface KnownVariant {
   handle: string;
   size: string;
-  priceJpy: number | null;
+  price: number | null;
+  /** Currency the stored price is in. Null means unknown, never assumed. */
+  currency: string | null;
   status: StockStatus;
 }
 
@@ -36,8 +38,10 @@ export interface DetectedChange {
   event: ChangeEvent;
   previousStatus: StockStatus | null;
   currentStatus: StockStatus | null;
-  previousPriceJpy: number | null;
-  currentPriceJpy: number | null;
+  previousPrice: number | null;
+  currentPrice: number | null;
+  /** Currency both prices are in. Null when they cannot be compared. */
+  currency: string | null;
 }
 
 /** Lookup key for a tracked unit: product handle plus size. See types.ts. */
@@ -76,8 +80,9 @@ export function detectChanges(
       event: 'NEW_PRODUCT',
       previousStatus: null,
       currentStatus: null,
-      previousPriceJpy: null,
-      currentPriceJpy: null
+      previousPrice: null,
+      currentPrice: null,
+      currency: null
     });
   }
 
@@ -95,8 +100,9 @@ export function detectChanges(
           event: 'NEW_VARIANT',
           previousStatus: null,
           currentStatus: variant.status,
-          previousPriceJpy: null,
-          currentPriceJpy: variant.priceJpy
+          previousPrice: null,
+          currentPrice: variant.price,
+          currency: variant.currency
         });
       }
       continue;
@@ -110,8 +116,9 @@ export function detectChanges(
         event: 'SOLD_OUT',
         previousStatus: known.status,
         currentStatus: variant.status,
-        previousPriceJpy: known.priceJpy,
-        currentPriceJpy: variant.priceJpy
+        previousPrice: known.price,
+        currentPrice: variant.price,
+        currency: variant.currency
       });
     } else if (known.status === 'SOLD_OUT' && variant.status === 'AVAILABLE') {
       changes.push({
@@ -119,8 +126,9 @@ export function detectChanges(
         event: 'RESTOCK',
         previousStatus: known.status,
         currentStatus: variant.status,
-        previousPriceJpy: known.priceJpy,
-        currentPriceJpy: variant.priceJpy
+        previousPrice: known.price,
+        currentPrice: variant.price,
+        currency: variant.currency
       });
     }
 
@@ -128,18 +136,26 @@ export function detectChanges(
     // staying sold out, and that is worth knowing before it returns. Both sides
     // must be known numbers - a price appearing out of null is the parser
     // learning the field, not Supreme changing the price.
+    // The currency guard is not pedantry. jp.supreme.com sometimes answers with
+    // the US store, so a size can go from 14800 JPY to 148 USD between scans
+    // while its actual price never moved. Comparing those numbers would fire a
+    // "price dropped 99%" alert on a shop that changed nothing.
     if (
-      known.priceJpy !== null &&
-      variant.priceJpy !== null &&
-      known.priceJpy !== variant.priceJpy
+      known.price !== null &&
+      variant.price !== null &&
+      known.currency !== null &&
+      variant.currency !== null &&
+      known.currency === variant.currency &&
+      known.price !== variant.price
     ) {
       changes.push({
         ...base(product, variant),
         event: 'PRICE_CHANGED',
         previousStatus: known.status,
         currentStatus: variant.status,
-        previousPriceJpy: known.priceJpy,
-        currentPriceJpy: variant.priceJpy
+        previousPrice: known.price,
+        currentPrice: variant.price,
+        currency: variant.currency
       });
     }
   }

@@ -20,7 +20,8 @@ const HEADERS = [
   'Color',
   'Size',
   'SKU',
-  'Price (JPY)',
+  'Price',
+  'Currency',
   'Status',
   'Latest Event',
   'First Seen At',
@@ -41,8 +42,13 @@ function toCells(row: DashboardRow): Cell[] {
     row.color,
     row.size,
     row.sku,
-    // Price stays a number so the column stays numeric; null stays null.
-    row.price_jpy === null ? null : Number(row.price_jpy),
+    // Price stays a number so the column stays numeric; null stays null. The
+    // currency rides in its own column rather than being baked into the header,
+    // because jp.supreme.com does not always answer in the same one and a
+    // "Price (JPY)" heading over a USD figure is a wrong number with a
+    // confident label.
+    row.price === null ? null : Number(row.price),
+    row.currency,
     row.status,
     row.latest_event,
     isoOrNull(row.first_seen_at),

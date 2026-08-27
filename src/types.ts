@@ -29,8 +29,21 @@ export interface ScrapedVariant {
   size: string;
   /** Supreme's SKU, e.g. FW26SH1-ORA-L — encodes season, style, colour, size. */
   sku: string | null;
-  /** Price in yen, whole units. Shopify serves minor units; converted on parse. */
-  priceJpy: number | null;
+  /**
+   * Price in whole units of `currency`. Shopify serves minor units; converted
+   * on parse.
+   */
+  price: number | null;
+  /**
+   * ISO-4217 code the price is quoted in, read from the page.
+   *
+   * NEVER ASSUMED. jp.supreme.com does not always serve the Japanese store:
+   * some responses come back as the US store with USD prices, and an Oxford
+   * shirt at 14800 is $148, not the 148 yen it would become if the currency
+   * were taken for granted. Null when the page did not declare one, which is
+   * "we do not know what this number is" and must not be printed with a symbol.
+   */
+  currency: string | null;
   status: StockStatus;
 }
 

@@ -58,9 +58,19 @@ export interface DiscordMessage {
   embeds: DiscordEmbed[];
 }
 
-function yen(amount: number | null): string {
-  // No currency symbol on an unknown amount -- "¥ null" reads as a price.
-  return amount === null ? 'unknown' : `¥${amount.toLocaleString('en-US')}`;
+/**
+ * Money for an alert.
+ *
+ * The currency is passed in rather than assumed. jp.supreme.com sometimes
+ * answers with the US store, and an alert reading "¥148" for a shirt that
+ * actually costs $148 is worse than one that says nothing.
+ */
+function money(amount: number | null, currency: string | null): string {
+  if (amount === null) return 'unknown';
+  const text = amount.toLocaleString('en-US');
+  if (currency === 'JPY') return `¥${text}`;
+  if (currency === 'USD') return `$${text}`;
+  return currency ? `${text} ${currency}` : text;
 }
 
 function describe(change: DetectedChange): string {
@@ -69,9 +79,12 @@ function describe(change: DetectedChange): string {
   if (change.size) parts.push(`Size ${change.size}`);
 
   if (change.event === 'PRICE_CHANGED') {
-    parts.push(`${yen(change.previousPriceJpy)} -> ${yen(change.currentPriceJpy)}`);
-  } else if (change.currentPriceJpy !== null) {
-    parts.push(yen(change.currentPriceJpy));
+    parts.push(
+      `${money(change.previousPrice, change.currency)} -> ` +
+        `${money(change.currentPrice, change.currency)}`
+    );
+  } else if (change.currentPrice !== null) {
+    parts.push(money(change.currentPrice, change.currency));
   }
 
   return parts.join(' | ');

@@ -26,6 +26,8 @@ Events: `NEW_PRODUCT` · `NEW_VARIANT` · `SOLD_OUT` · `RESTOCK` · `PRICE_CHAN
 
 **Nothing is ever deleted when it sells out.** A sold-out size keeps its row so its return is recognised as a RESTOCK rather than a first sighting. That single rule is the reason the tool exists.
 
+**A price change is only a price change in the same currency.** When the store switches, a shirt goes from 14800 JPY to 148 USD without Supreme touching the price; comparing those numbers would announce a 99% drop. The detector requires both sides to name the same currency before it says anything.
+
 **`UNKNOWN` never produces an event.** A failed fetch is UNKNOWN, not SOLD_OUT. Treating a network hiccup as a sell-out would alert that the whole catalogue vanished, and the recovery would alert that it all came back — two false alarms that teach the reader to mute the channel.
 
 ---
@@ -119,7 +121,9 @@ Parser tests run against HTML captured from the live site. A fixture I wrote mys
 
 ## Export
 
-Columns: `Product Name · Product URL · Category · Color · Size · SKU · Price (JPY) · Status · Latest Event · First Seen At · Last Checked At`
+Columns: `Product Name · Product URL · Category · Color · Size · SKU · Price · Currency · Status · Latest Event · First Seen At · Last Checked At`
+
+**Currency is a column, not a header.** jp.supreme.com does not always answer with the Japanese store - some responses come back as the US store with USD prices, where an Oxford shirt reads 14800 and means $148, not the 148 yen it becomes if the currency is assumed. So every price carries the currency the page declared, and a price whose currency is unknown is exported without one rather than wearing a symbol nobody established.
 
 **An unknown price exports as an empty cell — never `0`.** A zero gets averaged into a total as though someone had observed it. Dashboard and export read the same query, so the spreadsheet can never disagree with the screen.
 

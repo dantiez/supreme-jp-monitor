@@ -45,7 +45,11 @@ CREATE TABLE IF NOT EXISTS supreme_monitor.variants (
   -- Size label exactly as Supreme spells it ("Large", "One Size").
   size            text        NOT NULL,
   sku             text,
-  price_jpy       integer,
+  price           integer,
+  -- ISO-4217, read from the page rather than assumed. jp.supreme.com sometimes
+  -- serves the US store, and 14800 there is $148, not the 148 yen it becomes
+  -- if the currency is taken for granted.
+  currency        text,
   -- AVAILABLE | SOLD_OUT | UNKNOWN. UNKNOWN means the check failed, which is
   -- deliberately distinct from SOLD_OUT.
   status          text        NOT NULL DEFAULT 'UNKNOWN',
@@ -66,8 +70,9 @@ CREATE TABLE IF NOT EXISTS supreme_monitor.change_events (
   event              text        NOT NULL,
   previous_status    text,
   current_status     text,
-  previous_price_jpy integer,
-  current_price_jpy  integer,
+  previous_price     integer,
+  current_price      integer,
+  currency           text,
   detected_at        timestamptz NOT NULL DEFAULT now()
 );
 
@@ -90,3 +95,27 @@ CREATE TABLE IF NOT EXISTS supreme_monitor.scan_runs (
 );
 
 CREATE INDEX IF NOT EXISTS scan_runs_started_idx ON supreme_monitor.scan_runs (started_at DESC);
+
+-- Migration for databases created before prices carried their currency.
+-- Prices written then were labelled yen unconditionally, so any that were in
+-- fact USD are now indistinguishable from JPY. They are dropped rather than
+-- guessed: an unknown price is honest, a confidently mislabelled one is not,
+-- and the next scan refills every row it can still reach.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='supreme_monitor' AND table_name='variants'
+               AND column_name='price_jpy') THEN
+    ALTER TABLE supreme_monitor.variants RENAME COLUMN price_jpy TO price;
+    ALTER TABLE supreme_monitor.variants ADD COLUMN IF NOT EXISTS currency text;
+    UPDATE supreme_monitor.variants SET price = NULL, currency = NULL;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='supreme_monitor' AND table_name='change_events'
+               AND column_name='previous_price_jpy') THEN
+    ALTER TABLE supreme_monitor.change_events RENAME COLUMN previous_price_jpy TO previous_price;
+    ALTER TABLE supreme_monitor.change_events RENAME COLUMN current_price_jpy TO current_price;
+    ALTER TABLE supreme_monitor.change_events ADD COLUMN IF NOT EXISTS currency text;
+  END IF;
+END $$;

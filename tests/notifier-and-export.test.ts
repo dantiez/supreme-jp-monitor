@@ -15,7 +15,7 @@ import {
   buildExportFilename
 } from '../src/server/export-writer.js';
 import { DashboardRow } from '../src/db/monitor-repository.js';
-import { escapeHtml, formatYen, renderDashboard } from '../src/server/dashboard-page.js';
+import { escapeHtml, formatMoney, renderDashboard } from '../src/server/dashboard-page.js';
 
 function change(over: Partial<DetectedChange> = {}): DetectedChange {
   return {
@@ -27,8 +27,9 @@ function change(over: Partial<DetectedChange> = {}): DetectedChange {
     event: 'RESTOCK',
     previousStatus: 'SOLD_OUT',
     currentStatus: 'AVAILABLE',
-    previousPriceJpy: 15400,
-    currentPriceJpy: 15400,
+    previousPrice: 15400,
+    currentPrice: 15400,
+    currency: 'JPY',
     ...over
   };
 }
@@ -57,14 +58,14 @@ describe('Discord message', () => {
 
   it('shows a price move as before -> after', () => {
     const message = buildDiscordMessage([
-      change({ event: 'PRICE_CHANGED', previousPriceJpy: 15400, currentPriceJpy: 17600 })
+      change({ event: 'PRICE_CHANGED', previousPrice: 15400, currentPrice: 17600 })
     ]);
     expect(message!.embeds[0]!.description).toContain('¥15,400 -> ¥17,600');
   });
 
   it('never prints a currency symbol against an unknown amount', () => {
     const message = buildDiscordMessage([
-      change({ event: 'PRICE_CHANGED', previousPriceJpy: null, currentPriceJpy: 17600 })
+      change({ event: 'PRICE_CHANGED', previousPrice: null, currentPrice: 17600 })
     ]);
     expect(message!.embeds[0]!.description).toContain('unknown -> ¥17,600');
   });
@@ -97,7 +98,7 @@ function row(over: Partial<DashboardRow> = {}): DashboardRow {
     category: 'tops',
     size: 'Large',
     sku: 'FW26TS1-BLK-L',
-    price_jpy: 15400,
+    price: 15400, currency: 'JPY',
     status: 'AVAILABLE',
     url: 'https://jp.supreme.com/products/h1',
     latest_event: 'RESTOCK',
@@ -116,7 +117,7 @@ describe('export', () => {
 
   it('exports an unknown price as an empty cell, never 0', () => {
     // 0 would be averaged into a total as though someone had observed it.
-    const line = generateCsv([row({ price_jpy: null })]).split('\r\n')[1]!;
+    const line = generateCsv([row({ price: null, currency: null })]).split('\r\n')[1]!;
     expect(line).toContain('"",');
     expect(line).not.toContain('"0"');
   });
@@ -131,7 +132,7 @@ describe('export', () => {
   });
 
   it('omits unknown cells from the workbook so AVERAGE skips them', () => {
-    const sheet = XLSX.read(generateXlsxBuffer([row({ price_jpy: null })]), {
+    const sheet = XLSX.read(generateXlsxBuffer([row({ price: null, currency: null })]), {
       type: 'buffer'
     }).Sheets['Supreme JP Stock']!;
     // Column G is Price.
@@ -164,8 +165,8 @@ describe('dashboard rendering', () => {
   });
 
   it('renders an unknown price as a dash, not 0', () => {
-    expect(formatYen(null)).toBe('—');
-    expect(formatYen(15400)).toBe('¥15,400');
+    expect(formatMoney(null, 'JPY')).toBe('—');
+    expect(formatMoney(15400, 'JPY')).toBe('¥15,400');
   });
 
   it('says the table is empty rather than rendering a blank page', () => {

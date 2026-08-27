@@ -11,7 +11,7 @@ import {
 import { ScrapedProduct, ScrapedVariant, StockStatus } from '../src/types.js';
 
 function variant(over: Partial<ScrapedVariant> = {}): ScrapedVariant {
-  return { size: 'Large', sku: 'FW26SH1-ORA-L', priceJpy: 22000, status: 'AVAILABLE', ...over };
+  return { size: 'Large', sku: 'FW26SH1-ORA-L', price: 22000, currency: 'JPY', status: 'AVAILABLE', ...over };
 }
 
 function product(over: Partial<ScrapedProduct> = {}): ScrapedProduct {
@@ -33,7 +33,8 @@ function known(over: Partial<KnownVariant> = {}): Map<string, KnownVariant> {
   const k: KnownVariant = {
     handle: '0-fow3-gelgp4at',
     size: 'Large',
-    priceJpy: 22000,
+    price: 22000,
+    currency: 'JPY',
     status: 'AVAILABLE',
     ...over
   };
@@ -109,8 +110,8 @@ describe('SOLD_OUT and RESTOCK', () => {
       ]
     });
     const knownBoth = new Map<string, KnownVariant>([
-      [variantKey('0-fow3-gelgp4at', 'Small'), { handle: '0-fow3-gelgp4at', size: 'Small', priceJpy: 22000, status: 'AVAILABLE' }],
-      [variantKey('0-fow3-gelgp4at', 'Large'), { handle: '0-fow3-gelgp4at', size: 'Large', priceJpy: 22000, status: 'SOLD_OUT' }]
+      [variantKey('0-fow3-gelgp4at', 'Small'), { handle: '0-fow3-gelgp4at', size: 'Small', price: 22000, currency: 'JPY', status: 'AVAILABLE' }],
+      [variantKey('0-fow3-gelgp4at', 'Large'), { handle: '0-fow3-gelgp4at', size: 'Large', price: 22000, currency: 'JPY', status: 'SOLD_OUT' }]
     ]);
     const events = detectChanges(p, TRACKED, knownBoth).map((c) => `${c.size}:${c.event}`);
     expect(events).toEqual(['Small:SOLD_OUT', 'Large:RESTOCK']);
@@ -137,43 +138,65 @@ describe('UNKNOWN never produces an event', () => {
 
 describe('PRICE_CHANGED', () => {
   it('fires when a known price moves', () => {
-    const p = product({ variants: [variant({ priceJpy: 17600 })] });
-    const [change] = detectChanges(p, TRACKED, known({ priceJpy: 15400 }));
+    const p = product({ variants: [variant({ price: 17600, currency: 'JPY' })] });
+    const [change] = detectChanges(p, TRACKED, known({ price: 15400, currency: 'JPY' }));
     expect(change!.event).toBe('PRICE_CHANGED');
-    expect(change!.previousPriceJpy).toBe(15400);
-    expect(change!.currentPriceJpy).toBe(17600);
+    expect(change!.previousPrice).toBe(15400);
+    expect(change!.currentPrice).toBe(17600);
   });
 
   it('fires even while the size stays sold out', () => {
     // Worth knowing before it returns to stock.
-    const p = product({ variants: [variant({ status: 'SOLD_OUT', priceJpy: 17600 })] });
+    const p = product({ variants: [variant({ status: 'SOLD_OUT', price: 17600, currency: 'JPY' })] });
     const events = detectChanges(
       p,
       TRACKED,
-      known({ status: 'SOLD_OUT', priceJpy: 15400 })
+      known({ status: 'SOLD_OUT', price: 15400, currency: 'JPY' })
     ).map((c) => c.event);
     expect(events).toEqual(['PRICE_CHANGED']);
   });
 
   it('does not fire when a price appears out of null', () => {
     // That is the parser learning the field, not Supreme changing the price.
-    const p = product({ variants: [variant({ priceJpy: 22000 })] });
-    const changes = detectChanges(p, TRACKED, known({ priceJpy: null }));
+    const p = product({ variants: [variant({ price: 22000, currency: 'JPY' })] });
+    const changes = detectChanges(p, TRACKED, known({ price: null }));
     expect(changes.filter((c) => c.event === 'PRICE_CHANGED')).toEqual([]);
   });
 
   it('does not fire when the price becomes unreadable', () => {
-    const p = product({ variants: [variant({ priceJpy: null })] });
-    const changes = detectChanges(p, TRACKED, known({ priceJpy: 22000 }));
+    const p = product({ variants: [variant({ price: null, currency: 'JPY' })] });
+    const changes = detectChanges(p, TRACKED, known({ price: 22000, currency: 'JPY' }));
     expect(changes.filter((c) => c.event === 'PRICE_CHANGED')).toEqual([]);
   });
 
+  it('does not fire when only the CURRENCY changed', () => {
+    // The bug this guards. jp.supreme.com sometimes answers with the US store,
+    // so a shirt recorded at 14800 JPY comes back as 148 USD while its actual
+    // price never moved. Comparing the raw numbers would announce a 99% price
+    // drop on a shop that changed nothing.
+    const p = product({ variants: [variant({ price: 148, currency: 'USD' })] });
+    const changes = detectChanges(p, TRACKED, known({ price: 14800, currency: 'JPY' }));
+    expect(changes.filter((c) => c.event === 'PRICE_CHANGED')).toEqual([]);
+  });
+
+  it('does not fire when either side has no known currency', () => {
+    const p = product({ variants: [variant({ price: 17600, currency: null })] });
+    const changes = detectChanges(p, TRACKED, known({ price: 15400, currency: 'JPY' }));
+    expect(changes.filter((c) => c.event === 'PRICE_CHANGED')).toEqual([]);
+  });
+
+  it('carries the currency on the change, so the alert can print it', () => {
+    const p = product({ variants: [variant({ price: 17600, currency: 'JPY' })] });
+    const [change] = detectChanges(p, TRACKED, known({ price: 15400, currency: 'JPY' }));
+    expect(change!.currency).toBe('JPY');
+  });
+
   it('reports a sell-out and a reprice in the same check', () => {
-    const p = product({ variants: [variant({ status: 'SOLD_OUT', priceJpy: 17600 })] });
+    const p = product({ variants: [variant({ status: 'SOLD_OUT', price: 17600, currency: 'JPY' })] });
     const events = detectChanges(
       p,
       TRACKED,
-      known({ status: 'AVAILABLE', priceJpy: 15400 })
+      known({ status: 'AVAILABLE', price: 15400, currency: 'JPY' })
     ).map((c) => c.event);
     expect(events).toEqual(['SOLD_OUT', 'PRICE_CHANGED']);
   });
