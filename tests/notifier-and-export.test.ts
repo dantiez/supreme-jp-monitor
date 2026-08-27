@@ -7,7 +7,10 @@
 
 import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
-import { buildDiscordMessage } from '../src/notify/discord-notifier.js';
+import {
+  buildDiscordMessage,
+  listingChangeToDetected
+} from '../src/notify/discord-notifier.js';
 import { DetectedChange } from '../src/core/change-detector.js';
 import {
   generateCsv,
@@ -256,5 +259,44 @@ describe('dashboard rendering', () => {
     const html = renderDashboard([row()], ['tops'], { status: 'AVAILABLE' });
     expect(html).toContain('/export?format=csv&status=AVAILABLE');
     expect(html).toContain('/export?format=xlsx&status=AVAILABLE');
+  });
+});
+
+describe('listing changes reach Discord', () => {
+  const listing = (event: 'DELISTED' | 'RELISTED') => ({
+    handle: 'h1',
+    productName: 'Box Logo Tee',
+    color: 'Black',
+    url: 'https://jp.supreme.com/products/h1',
+    event
+  });
+
+  it('announces a product removed from the site', () => {
+    // These were being stored and shown on the dashboard but never announced,
+    // so a product could vanish and the channel would say nothing.
+    const message = buildDiscordMessage([listingChangeToDetected(listing('DELISTED'))]);
+    expect(message!.embeds[0]!.title).toContain('Removed from the site');
+    expect(message!.content).toContain('Removed from the site: 1');
+  });
+
+  it('does not call a removal a sell-out', () => {
+    // Sold out means the shop has none; removed means it no longer offers it.
+    const message = buildDiscordMessage([listingChangeToDetected(listing('DELISTED'))]);
+    expect(message!.embeds[0]!.title).not.toContain('Sold out');
+  });
+
+  it('ranks a relisting near the top, beside a restock', () => {
+    const message = buildDiscordMessage([
+      change({ event: 'SOLD_OUT' }),
+      listingChangeToDetected(listing('RELISTED'))
+    ]);
+    expect(message!.embeds[0]!.title).toContain('Listed again');
+  });
+
+  it('carries no size or price, because a removal has neither', () => {
+    const d = listingChangeToDetected(listing('DELISTED'));
+    expect(d.size).toBeNull();
+    expect(d.currentPrice).toBeNull();
+    expect(d.color).toBe('Black');
   });
 });

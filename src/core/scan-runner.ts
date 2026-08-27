@@ -228,8 +228,12 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
     // The first run discovers the entire catalogue at once. Announcing several
     // hundred NEW_PRODUCTs would bury the channel and teach the reader to mute
     // it before the first real restock ever arrives.
-    if (shouldNotify && !firstRun && summary.changes.length > 0) {
-      await notifyChanges(summary.changes);
+    if (
+      shouldNotify &&
+      !firstRun &&
+      (summary.changes.length > 0 || summary.listingChanges.length > 0)
+    ) {
+      await notifyChanges(summary.changes, summary.listingChanges);
     } else if (firstRun) {
       console.log(`[scan] first run: ${summary.changes.length} products recorded, notification suppressed`);
     }

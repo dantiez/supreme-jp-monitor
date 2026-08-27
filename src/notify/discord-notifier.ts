@@ -10,7 +10,7 @@
 // events are ordered by usefulness, capped, and the remainder is counted rather
 // than dropped silently.
 
-import { DetectedChange } from '../core/change-detector.js';
+import { DetectedChange, ListingChange } from '../core/change-detector.js';
 import { ChangeEvent } from '../types.js';
 
 /** Discord hard limits: 10 embeds per message, 2000 characters of content. */
@@ -170,9 +170,45 @@ export async function sendDiscordMessage(message: DiscordMessage): Promise<boole
   }
 }
 
-/** Convenience for the scan runner: build and send, tolerating both no-ops. */
-export async function notifyChanges(changes: DetectedChange[]): Promise<boolean> {
-  const message = buildDiscordMessage(changes);
+/**
+ * A product leaving or rejoining the catalogue, in the shape the message
+ * builder already understands.
+ *
+ * Listing changes concern the whole product rather than one size, so size,
+ * status and price are genuinely absent -- null, not zero or a placeholder.
+ */
+export function listingChangeToDetected(change: ListingChange): DetectedChange {
+  return {
+    handle: change.handle,
+    productName: change.productName,
+    size: null,
+    color: change.color,
+    url: change.url,
+    event: change.event,
+    previousStatus: null,
+    currentStatus: null,
+    previousPrice: null,
+    currentPrice: null,
+    currency: null
+  };
+}
+
+/**
+ * Build and send, tolerating both no-ops.
+ *
+ * Listing changes are folded in here rather than sent as a second message.
+ * They were being stored and shown on the dashboard but never announced, so a
+ * product could vanish from the shop and the channel would say nothing --
+ * exactly the silence the monitor exists to prevent.
+ */
+export async function notifyChanges(
+  changes: DetectedChange[],
+  listingChanges: ListingChange[] = []
+): Promise<boolean> {
+  const message = buildDiscordMessage([
+    ...changes,
+    ...listingChanges.map(listingChangeToDetected)
+  ]);
   if (!message) return false;
   return sendDiscordMessage(message);
 }
