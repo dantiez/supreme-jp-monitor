@@ -301,6 +301,46 @@ describe('listing changes reach Discord', () => {
   });
 });
 
+describe('the sold-out list is put away when nothing moved', () => {
+  const soldOut = row({ status: 'SOLD_OUT', name: 'Sith Skateboard' });
+
+  it('hides the rows and keeps only the note', () => {
+    // What the reader acts on is what CHANGED. On a quiet day the sold-out
+    // list is identical to last time and buries that.
+    const html = renderDashboard([soldOut], [], {}, { lastScanChanges: 0 });
+    expect(html).toContain('không có thay đổi nào');
+    expect(html).not.toContain('Sith Skateboard');
+  });
+
+  it('drops the count with them rather than claiming zero', () => {
+    // The rows still exist. "HẾT HÀNG 0" would be false, and the real number
+    // above an empty list would be a dangling figure.
+    const html = renderDashboard([soldOut], [], {}, { lastScanChanges: 0 });
+    // Read the red section alone -- the green column has its own count.
+    const outColumn = html.slice(html.indexOf('<section class="col out">'));
+    expect(outColumn).not.toContain('class="count"');
+    expect(outColumn).not.toContain('Không có mục nào.');
+  });
+
+  it('still shows them when the reader asked for sold-out stock', () => {
+    // An explicit filter must win, or it looks broken.
+    const html = renderDashboard([soldOut], [], { status: 'SOLD_OUT' }, {
+      lastScanChanges: 0
+    });
+    expect(html).toContain('Sith Skateboard');
+  });
+
+  it('shows them whenever the last scan did move something', () => {
+    const html = renderDashboard([soldOut], [], {}, { lastScanChanges: 4 });
+    expect(html).toContain('Sith Skateboard');
+  });
+
+  it('shows them when nothing has been scanned yet', () => {
+    const html = renderDashboard([soldOut], [], {}, { lastScanChanges: null });
+    expect(html).toContain('Sith Skateboard');
+  });
+});
+
 describe('the sold-out column reports the last scan', () => {
   it('says so when the last scan found nothing', () => {
     // The column lists current stock, not a diff, so it is never empty and the
