@@ -64,7 +64,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --no-notify` | Record changes without posting |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 88 tests |
+| `npm test` | Vitest: 93 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -78,6 +78,8 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 The button starts the work and returns immediately; the page polls, because a full read takes roughly 100 seconds and holding a request open that long invites the browser or a proxy to give up while the scan carries on writing.
 
 **The result is reported in terms the reader acts on.** A scan that finds something shows a banner naming what moved — "Mất hàng: 4 vừa hết hàng" — rather than a bare total. A single number is not actionable: four changes could be four restocks or four sell-outs, and for someone who has already listed these items for resale those are opposite pieces of news, one meaning stock to buy and the other a listing to pull. Reloading the list is offered as a button, never forced, since the reader may be part-way through copying a line.
+
+**A scan that finds nothing puts the sold-out list away.** On a quiet day that list is identical to last time, and several hundred unchanged rows bury the thing the reader acts on -- what moved. The column keeps the note alone; the count goes with the rows, since those items still exist and printing 0 would be false. Nothing is deleted: the export and `/changes` still carry every one of them, and an explicit "chỉ hết hàng" filter brings them straight back.
 
 **A scan that finds nothing says so, on the sold-out side.** The red column lists current stock rather than a diff, so it is never empty and the good news would otherwise have nowhere to land; it appears as a note above the list. "The last check found nothing" and "nothing has been checked yet" are kept apart, because only one of them is reassuring.
 

@@ -114,19 +114,36 @@ function renderLine(row: DashboardRow): string {
 </li>`;
 }
 
+interface ColumnOptions {
+  note?: string;
+  /**
+   * Show the note alone and leave the list out.
+   *
+   * The count goes with it: these rows still exist, so printing 0 would be a
+   * lie, and printing 472 above nothing would be a dangling number.
+   */
+  collapsed?: boolean;
+}
+
 function renderColumn(
   title: string,
   tone: 'ok' | 'out',
   rows: DashboardRow[],
-  note?: string
+  options: ColumnOptions = {}
 ): string {
+  const { note, collapsed = false } = options;
+
   return `<section class="col ${tone}">
-  <h2><span class="dot"></span>${escapeHtml(title)} <span class="count">${rows.length}</span></h2>
+  <h2><span class="dot"></span>${escapeHtml(title)}${
+    collapsed ? '' : ` <span class="count">${rows.length}</span>`
+  }</h2>
   ${note ? `<p class="col-note">${escapeHtml(note)}</p>` : ''}
   ${
-    rows.length === 0
-      ? '<p class="empty">Không có mục nào.</p>'
-      : `<ul>${rows.map(renderLine).join('\n')}</ul>`
+    collapsed
+      ? ''
+      : rows.length === 0
+        ? '<p class="empty">Không có mục nào.</p>'
+        : `<ul>${rows.map(renderLine).join('\n')}</ul>`
   }
 </section>`;
 }
@@ -153,10 +170,20 @@ export function renderDashboard(
   // The list below is current stock, not a diff, so it is never empty and the
   // "nothing changed" news would otherwise have nowhere to appear. Stated as a
   // note above the column rather than in place of it.
-  const soldOutNote =
-    meta.lastScanChanges === 0
-      ? 'Lần quét gần nhất: không có thay đổi nào.'
-      : undefined;
+  const nothingChanged = meta.lastScanChanges === 0;
+
+  // When the last scan moved nothing, the sold-out list is the same list as
+  // last time and the customer asked for it out of the way -- what they act on
+  // is what CHANGED, and 472 unchanged rows bury that. The rows are only
+  // hidden, never dropped: the export and /changes still carry all of them.
+  //
+  // An explicit "chỉ hết hàng" filter overrides this. Someone who asked to see
+  // sold-out stock must get it, or the filter looks broken.
+  const collapseSoldOut = nothingChanged && !filters.status;
+
+  const soldOutNote = nothingChanged
+    ? 'Lần quét gần nhất: không có thay đổi nào.'
+    : undefined;
 
   const lastChecked = rows.reduce<string | null>(
     (latest, r) => (!latest || r.last_checked_at > latest ? r.last_checked_at : latest),
@@ -254,7 +281,7 @@ export function renderDashboard(
 
 <main>
   ${renderColumn('Còn hàng', 'ok', available)}
-  ${renderColumn('Hết hàng', 'out', soldOut, soldOutNote)}
+  ${renderColumn('Hết hàng', 'out', soldOut, { note: soldOutNote, collapsed: collapseSoldOut })}
 </main>
 
 ${
