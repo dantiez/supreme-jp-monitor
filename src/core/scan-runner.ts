@@ -17,10 +17,21 @@ import * as repo from '../db/monitor-repository.js';
 import { notifyChanges } from '../notify/discord-notifier.js';
 
 /**
- * Collections to sweep for product discovery. `new` alone covers current drops;
- * the others catch items that age out of it.
+ * Collections to sweep for discovery. ONE is enough, and that is a measurement
+ * rather than an assumption.
+ *
+ * Supreme ignores the collection path: /collections/new, /collections/jackets
+ * and /collections/shoes all return the SAME 241 products carrying every
+ * product_type (jackets, shirts, sweatshirts, pants, shorts, ...). Listing
+ * eight of them meant eight identical ~1 MB fetches per scan, seven of which
+ * bought nothing but load on someone else's shop.
+ *
+ * It also means discovery is complete: one request sees the whole catalogue,
+ * so no product can be missed by being in an unlisted collection.
+ *
+ * Kept configurable in case Supreme starts honouring the path.
  */
-export const DEFAULT_COLLECTIONS = ['new', 'jackets', 'shirts', 'tops-sweaters', 'sweatshirts', 'pants', 'accessories', 'shoes'];
+export const DEFAULT_COLLECTIONS = ['new'];
 
 export interface ScanOptions {
   collections?: string[];

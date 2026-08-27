@@ -55,7 +55,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan` | One full sweep: discover, check, diff, store, alert |
 | `npm run scan -- --max=50` | Cap products checked (listing order is newest-first) |
 | `npm run scan -- --no-notify` | Record changes without posting |
-| `npm run scan -- --collections=new,jackets` | Restrict discovery |
+| `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
 | `npm test` | Vitest: 58 tests |
 | `npm run lint` | `tsc --noEmit` |
@@ -127,7 +127,7 @@ Columns: `Product Name · Product URL · Category · Color · Size · SKU · Pri
 
 ## Known gaps
 
-- **Discovery is limited to the configured collections** (`new`, `jackets`, `shirts`, …). A product in no listed collection is never found. `/collections/new` alone returns ~241 products.
+- **Discovery reads one collection, and that is enough.** Supreme ignores the collection path — `/collections/new`, `/collections/jackets` and `/collections/shoes` all return the same ~241 products with every product_type in them. So one request sees the whole catalogue and nothing can hide in an unlisted collection. Measured, not assumed; if Supreme ever starts honouring the path, `DEFAULT_COLLECTIONS` is where to add more.
 - **No per-size history chart.** Every change is stored in `change_events`; nothing plots it yet.
 - **The dashboard has no auth.** Fine on loopback; it needs a password before it is exposed. The server warns at boot on a public bind.
 - **Alerts cap at 10 embeds per message**, with the overflow counted in the summary line rather than dropped silently.
