@@ -12,7 +12,7 @@
 //   npm run scan -- --no-notify        -- store changes, stay silent
 //   npm run scan -- --collections=new  -- restrict discovery
 
-import 'dotenv/config';
+import '../load-env.js';
 import { runScan } from '../core/scan-runner.js';
 import { close } from '../db/database.js';
 

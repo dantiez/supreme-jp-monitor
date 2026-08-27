@@ -5,7 +5,7 @@
 // and a bundle to serve one table with three filters, and the table is the
 // whole feature.
 
-import 'dotenv/config';
+import '../load-env.js';
 import express from 'express';
 import * as repo from '../db/monitor-repository.js';
 import {
