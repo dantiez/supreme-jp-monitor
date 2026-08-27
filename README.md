@@ -52,6 +52,8 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `REQUEST_DELAY_MS` | no | Gap between requests, default 800ms |
 | `SCRAPER_USER_AGENT` | no | How the client identifies itself |
 | `DISPLAY_TIMEZONE` | no | Zone for displayed times. Default `Asia/Tokyo` |
+| `DASHBOARD_PASSWORD` | on a public host | Shared password. Without it the server refuses to start off loopback |
+| `HOST` | no | Bind address. Default `127.0.0.1`; a platform needs `0.0.0.0` |
 
 **The first run is silent by design.** It discovers the whole catalogue at once; announcing several hundred NEW_PRODUCTs would bury the channel and train the reader to ignore it before the first real restock ever arrives.
 
@@ -64,7 +66,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --no-notify` | Record changes without posting |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 93 tests |
+| `npm test` | Vitest: 108 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -93,15 +95,23 @@ The button starts the work and returns immediately; the page polls, because a fu
 
 ## Sharing
 
-**Alerts are shared through Discord, not through the dashboard.** The webhook posts into a channel, so anyone invited to that channel gets every restock the moment it happens - no hosting, no accounts, no URL to hand out. For "is it back in stock yet", which is the question this tool exists to answer, that is the whole mechanism.
+**The dashboard is the product now, so it has to be reachable.** Alerts still go to Discord, but every part the customer asked for -- two columns, copy buttons, the scan button -- lives on the page. Handing someone the Discord channel is not handing them the tool.
 
-The dashboard is **local only, by design**: `npm run dev` binds `127.0.0.1`, which means *this machine*. It is for browsing and exporting on the machine that runs it, and the URL cannot be handed to anyone - every computer's `127.0.0.1` points at itself.
+**A password is required before it leaves loopback.** The server REFUSES TO START on a public host without `DASHBOARD_PASSWORD`. It used to print a warning and serve anyway, which is the same as no protection: a warning in a log nobody reads. What is behind it is not only the catalogue and the export -- it is `POST /api/scan`, so an unprotected URL lets a stranger start hundred-second scans against Supreme and the database, on repeat.
 
-Making it reachable by someone else would mean a public host, and the dashboard has **no authentication**: the URL would be readable, and the export downloadable, by anyone holding it. The server warns at boot on a non-loopback bind unless `ALLOW_PUBLIC_DASHBOARD=1` acknowledges that. Add a password before that changes.
+HTTP Basic, one shared password, no accounts. Two people share one secret; sessions and a user table would be scaffolding around a fact that fits in an environment variable. The username is not checked. Requests arriving over plain HTTP are refused rather than served, because Basic auth over cleartext hands the password to anyone on the path.
 
-Nothing here is scheduled, so if it is ever hosted, a free tier is enough - the cron lives in GitHub Actions precisely so the web side can sleep.
+On loopback there is no password and no prompt -- the reader already owns the machine.
 
----
+`/healthz` stays open: the platform probes it before routing traffic, and it answers liveness and nothing else.
+
+### Deploying
+
+`render.yaml` describes a free web service. `npm ci && npm start`, health check on `/healthz`, `HOST=0.0.0.0`, and four secrets entered in the dashboard rather than committed: `DATABASE_URL`, `DASHBOARD_PASSWORD`, `DISCORD_WEBHOOK_URL`.
+
+**`tsx` is a runtime dependency, not a dev one.** The server runs TypeScript directly. Render installs with `NODE_ENV=production` and skips `devDependencies`, so `tsx` sitting there meant the deploy would install cleanly and then fail on start with `tsx: not found`. Verified with `npm ci --omit=dev`.
+
+**The free plan stops the instance after ~15 minutes of no traffic.** The first page load after a quiet spell waits ~30-60s for a cold start before the ~100s scan can even begin. Nothing is lost -- state lives in Neon -- but the wait is real; `plan: starter` removes it.
 
 ## Layout
 

@@ -6,116 +6,150 @@
 
 ## Nó làm gì cho bạn
 
-Có một con bot đang **canh trang Supreme Nhật (jp.supreme.com) giùm bạn, 24/7**.
+Một trang web riêng, cho bạn xem **toàn bộ hàng trên jp.supreme.com** đang còn hay đã hết, và **so với lần quét gần nhất thì có gì đổi**.
 
-Cứ 2 tiếng nó vào xem một lượt toàn bộ sản phẩm. Thấy có gì đổi thì nhắn vào Discord.
+Dùng để canh hàng bạn đã đăng bán lại: món nào vừa hết thì gỡ tin, món nào có lại thì đăng tiếp.
 
-Bạn **không phải làm gì cả** — không cài, không mở web, không canh. Chỉ cần ở trong channel Discord là tin tự tới.
-
----
-
-## 5 loại tin bạn sẽ nhận
-
-### 🟢 Back in stock — **quan trọng nhất**
-
-> **Back in stock: Lynx Faux Fur WINDSTOPPER Overcoat**
-> Tan | Size Medium | ¥132,000
-
-Món này **trước đã hết, giờ có lại**. Đây là lý do con bot tồn tại.
-
-👉 **Bấm vào tên món là sang thẳng trang mua.** Hàng Supreme về lại thường bay rất nhanh — thấy tin này thì bấm luôn, đừng để lát nữa.
-
-### 🔵 New product — hàng mới lên sàn
-
-> **New product: Captains Varsity Jacket**
-> Brown
-
-Món chưa từng có, vừa xuất hiện.
-
-### 🟦 New size — món cũ có thêm size
-
-Món bạn đã thấy rồi, nay Supreme thêm size mới.
-
-### 🟡 Price changed — đổi giá
-
-> **Price changed: Woven Suede Hooded Work Jacket**
-> Black | Size Large | ¥129,000 → ¥132,000
-
-Giá cũ → giá mới.
-
-### ⚪ Sold out — vừa hết hàng
-
-Đọc cho biết thôi. Đến lúc bạn thấy tin này thì món đã hết rồi, không làm gì được nữa.
+> ### ⚠️ Nó KHÔNG tự chạy
+>
+> Chỉ khi bạn bấm nút thì nó mới đi xem. Bạn không bấm thì không có gì được kiểm tra.
+>
+> Lúc bạn đang ngủ mà có món về hàng rồi lại hết, nó sẽ **không** biết. Đây là điểm khác so với trước đây.
 
 ---
 
-## Cách đọc một tin
+## Lần đầu vào
 
-**Dòng đầu tiên là tổng kết:**
+1. Mở đường link được gửi cho bạn.
+2. Trình duyệt hỏi tên đăng nhập và mật khẩu:
+   - **Tên đăng nhập**: gõ gì cũng được (ví dụ `a`) — không ai kiểm tra
+   - **Mật khẩu**: dán mật khẩu được gửi kèm
+3. Chọn ghi nhớ để lần sau khỏi gõ lại.
+
+Nếu bạn để yên link một lúc lâu rồi mới mở, **trang sẽ chờ khoảng nửa phút đến một phút mới hiện**. Bình thường, cứ đợi.
+
+---
+
+## Dùng hằng ngày — 3 bước
+
+### Bước 1 — bấm nút xanh **Quét ngay**
+
+Nút đổi thành **Đang quét…** kèm một **vòng tròn xoay**. Vòng tròn còn xoay là nó vẫn đang làm.
+
+**Mất khoảng 2 phút.** Cứ để đấy. Chuyển tab khác rồi quay lại cũng được; đóng luôn trang cũng không sao — mở lại vẫn thấy nó đang chạy.
+
+### Bước 2 — đọc dòng kết quả
+
+Quét xong sẽ hiện một dòng báo:
+
+| Dòng báo | Nghĩa là | Bạn làm gì |
+|---|---|---|
+| *không có gì thay đổi so với lần trước* | Y hệt lần trước | Xong, nghỉ |
+| *Mất hàng: 4 vừa hết hàng* | 4 món vừa hết | Đi gỡ tin đang bán |
+| *Thêm hàng: 2 có hàng lại* | 2 món về hàng | Đăng bán được |
+
+Bấm **Xem chi tiết** để biết chính xác món nào.
+
+### Bước 3 — hai cột
+
+| Cột xanh — **CÒN HÀNG** | Cột đỏ — **HẾT HÀNG** |
+|---|---|
+| Đang mua được | Không mua được |
+
+Mỗi dòng là **một màu, một size riêng**. Supreme coi mỗi màu là một sản phẩm khác nhau, nên `Box Logo — Black — M` và `Box Logo — White — M` là hai dòng khác nhau.
+
+- Bấm vào tên → sang thẳng trang Supreme
+- Bấm **Copy** → chép tên món để dán đi chỗ khác
+
+**Nếu lần quét vừa rồi không có gì đổi**, cột đỏ không liệt kê nữa, chỉ hiện một dòng *"Lần quét gần nhất: không có thay đổi nào."* — vì danh sách đó y hệt lần trước, bày ra chỉ tổ rối mắt.
+
+---
+
+## Nút **Xem thay đổi**
+
+Mở trang riêng, so **lần quét này với lần quét ngay trước đó** (không phải so theo ngày).
+
+- Bên trái **Thêm hàng** (xanh): về hàng lại, hàng mới lên sàn
+- Bên phải **Mất hàng** (đỏ): vừa hết, hoặc bị gỡ khỏi sàn
+
+Có ô chọn ở trên để xem lại các lần quét cũ.
+
+> **"Hết hàng" và "gỡ khỏi sàn" là hai chuyện khác nhau.**
+> *Hết hàng* = Supreme vẫn bán món đó, tạm thời hết → có thể về lại.
+> *Gỡ khỏi sàn* = Supreme không còn bán món đó nữa → đừng chờ.
+
+---
+
+## Tin Discord
+
+Mỗi lần **có người bấm quét** và tìm thấy thay đổi, bot nhắn vào channel Discord. Không ai bấm thì không có tin.
+
+Thứ tự ưu tiên trong tin: **về hàng lại** → lên lại sàn → hàng mới → size mới → đổi giá → vừa hết hàng → gỡ khỏi sàn.
+
+Dòng đầu là tổng kết, ví dụ:
 
 > New product: 30 (showing 10, 20 more)
 
-Nghĩa là: có **30** món mới, Discord hiện **10** ô, còn **20** món nữa không hiện hết.
+Nghĩa là có **30** món mới, Discord chỉ hiện được **10** ô, còn **20** món nữa. Discord giới hạn 10 ô một tin — bot **nói rõ còn bao nhiêu** thay vì lặng lẽ giấu đi.
 
-Discord chỉ cho hiện tối đa 10 ô trong một tin. Bot **nói rõ còn bao nhiêu** thay vì lặng lẽ giấu đi — để bạn biết là còn nữa.
-
-**Mỗi ô bên dưới là một món:**
+Mỗi ô là một món, bấm được vào tên:
 
 ```
-New product: AOI GORE-TEX Hooded Jacket     ← tên món, BẤM ĐƯỢC
-Orange | Size Large | ¥85,800               ← màu | size | giá
+Back in stock: AOI GORE-TEX Hooded Jacket    ← tên món, BẤM ĐƯỢC
+Orange | Size Large | ¥85,800                ← màu | size | giá
 ```
+
+**Back in stock là tin đáng giá nhất** — hàng Supreme về lại bay rất nhanh, thấy là bấm luôn.
 
 ---
 
-## Một điều dễ hiểu nhầm
+## Tải file
 
-Bạn sẽ thấy **cùng một tên món xuất hiện nhiều lần**, ví dụ:
+- **Tải CSV** — mở bằng Excel hoặc Google Sheets
+- **Tải Excel** — file `.xlsx`
 
-> New product: Lynx Faux Fur WINDSTOPPER Overcoat — **Tan**
-> New product: Lynx Faux Fur WINDSTOPPER Overcoat — **Black**
+File có đủ mọi thứ trên màn hình, kèm giá và đơn vị tiền.
 
-**Đây không phải lỗi lặp tin.**
-
-Supreme coi **mỗi màu là một sản phẩm riêng biệt**, có trang riêng, giá riêng, tình trạng hàng riêng. Áo Tan hết hàng không có nghĩa áo Black hết. Nên bot cũng theo dõi riêng từng màu — đúng như cách Supreme làm.
+> Cột **Currency** ghi rõ tiền gì (JPY hay USD). Trang Supreme thỉnh thoảng trả về giá đô, nên đừng nhìn con số không mà đoán là yên.
+>
+> Ô giá **để trống** nghĩa là không đọc được giá — **không phải** giá bằng 0.
 
 ---
 
-## Nó KHÔNG làm được gì
+## Ô lọc phía trên
 
-Nói trước để bạn khỏi trông đợi nhầm:
+- **Tất cả danh mục** → chỉ xem áo, giày, phụ kiện…
+- **Mọi sự kiện** → chỉ xem món vừa về hàng, vừa hết hàng…
+- **Cả hai cột** → chỉ xem cột còn hàng, hoặc chỉ cột hết hàng
 
-| | |
+Chọn xong bấm **Lọc**.
+
+---
+
+## Mấy điều hay hỏi
+
+**Bấm nút hai lần cùng lúc thì sao?**
+Không sao. Nó báo "Đã có một lần quét đang chạy" và bỏ qua lần bấm thứ hai.
+
+**Hai người cùng mở link được không?**
+Được, cùng nhìn một dữ liệu. Một người bấm quét thì người kia cũng thấy nó đang chạy.
+
+**Có món ghi "chưa kiểm tra được" thì sao?**
+Lúc quét bị lỗi mạng với riêng món đó. Nó **không** bị xếp vào hết hàng — vì chưa ai xác nhận điều đó. Quét lại lần sau thường là hết.
+
+**Giờ hiển thị là giờ nào?**
+Giờ Nhật (GMT+9), ghi rõ trên đầu trang.
+
+**Đừng chia link cho người khác.** Ai có link và mật khẩu là xem được tất cả, tải được file, và bấm quét được.
+
+---
+
+## Khi thấy lạ
+
+| Hiện tượng | Làm gì |
 |---|---|
-| ❌ **Không mua hộ** | Bot chỉ báo tin. Bấm link rồi bạn tự mua |
-| ❌ **Không giữ hàng** | Không đặt trước, không giữ chỗ |
-| ❌ **Không báo tức thì** | Quét mỗi 2 tiếng → chậm nhất là 2 tiếng sau khi hàng về |
-| ❌ **Không đảm bảo còn hàng** | Món hot có thể hết trước khi bạn kịp bấm |
-
-Nói thẳng: với hàng cực hot, 2 tiếng là quá chậm. Bot này hợp để **không bỏ lỡ** những món về lại lặng lẽ mà không ai để ý — chứ không phải để tranh hàng limited với dân dùng bot mua tự động.
-
----
-
-## Không thấy tin gì nghĩa là sao?
-
-**Nghĩa là không có gì thay đổi.** Bình thường.
-
-Bot chỉ nhắn khi **thật sự có chuyện**. Nó **cố tình không** nhắn "hôm nay không có gì mới" mỗi 2 tiếng — vì nhắn kiểu đó vài ngày là bạn sẽ quen tay lướt qua, rồi tin quan trọng thật cũng bị lướt luôn.
-
-Im lặng = mọi thứ vẫn thế.
-
-Supreme thường **drop hàng vào thứ Năm**, nên hôm đó sẽ nhộn nhịp hẳn, các ngày khác im hơn.
-
----
-
-## Tóm gọn
-
-1. Ở trong channel Discord, không cần làm gì thêm
-2. Thấy **🟢 Back in stock** → bấm vào tên món ngay
-3. Cùng tên khác màu = hai món khác nhau, không phải lặp
-4. Im lặng = không có gì đổi
-5. Bot báo tin, không mua hộ
-
----
-
-*Có gì lạ — bot im quá lâu, hoặc báo sai — nhắn cho người quản lý bot.*
+| Trang quay mãi lúc mới mở | Đợi 1 phút, máy chủ đang khởi động lại |
+| Hỏi mật khẩu lại | Gõ lại, trình duyệt quên sau khi đóng |
+| "Không gọi được máy chủ" | Tải lại trang rồi bấm quét lại |
+| Vòng tròn xoay quá 5 phút | Tải lại trang; vẫn vậy thì báo người quản lý |
+| Số liệu y hệt lần trước | Đúng rồi — không có gì đổi thật |

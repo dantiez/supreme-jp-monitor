@@ -231,8 +231,16 @@ export function renderDashboard(
   .copy:hover { background:#f4f4f4; }
   .copy.done { color:#15803d; border-color:#22a447; }
   .empty { color:#999; font-size:13px; }
-  .scan { background:#15803d; color:#fff; border-color:#15803d; cursor:pointer; }
+  .scan { background:#15803d; color:#fff; border-color:#15803d; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
   .scan:disabled { background:#9ccbaa; border-color:#9ccbaa; cursor:default; }
+  /* Turns for as long as the SERVER says it is scanning, so the motion tracks
+     real work rather than an open request. */
+  .spin { width:13px; height:13px; border:2px solid rgba(255,255,255,.45); border-top-color:#fff;
+          border-radius:50%; display:inline-block; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  /* Motion is the only cue for readers who suppress animation, so the disabled
+     button and its "Đang quét…" label have to carry the message alone. */
+  @media (prefers-reduced-motion: reduce) { .spin { animation:none; } }
   .scan-status { font-size:12px; color:#666; }
   .col-note { margin:-4px 0 10px; font-size:13px; color:#666; background:#f6f8f6; border:1px solid #e4eae4; border-radius:6px; padding:6px 10px; }
   /* A result with changes must not look like a result without any. Someone who
@@ -292,8 +300,9 @@ ${
 
 <script>
   // The scan takes about 100 seconds, so the button starts it and the page
-  // polls. Showing a spinner on a request that is still open would be a lie
-  // about where the work is happening.
+  // polls. The spinner is driven by the polled running flag, never by an open
+  // request -- it has to mean "the server is scanning", which survives a
+  // reload, a second tab, and this page being closed and reopened mid-scan.
   (function () {
     var btn = document.getElementById('scan-btn');
     var out = document.getElementById('scan-status');
@@ -363,7 +372,7 @@ ${
 
     function render(state) {
       btn.disabled = state.running;
-      btn.textContent = state.running ? 'Đang quét…' : 'Quét ngay';
+      setBusy(state.running);
       out.textContent = describe(state);
 
       // Only announce a result once. Polling repeats the same finished state,
@@ -379,8 +388,21 @@ ${
       fetch('/api/scan/status').then(function (r) { return r.json(); }).then(render).catch(function () {});
     }
 
+    // innerHTML rather than textContent: the label carries the spinner element.
+    // Both states are literals defined here, so there is nothing to escape.
+    function setBusy(busy) {
+      btn.innerHTML = busy
+        ? '<span class="spin" aria-hidden="true"></span>Đang quét…'
+        : 'Quét ngay';
+      // Read aloud by screen readers, which cannot see a turning circle.
+      btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
+
     btn.addEventListener('click', function () {
       btn.disabled = true;
+      // Immediately, without waiting for the first poll: a button that sits
+      // still for three seconds after a click reads as a click that missed.
+      setBusy(true);
       out.textContent = 'Đang bắt đầu…';
       fetch('/api/scan', { method: 'POST' })
         .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
@@ -389,7 +411,13 @@ ${
           render(r.body.state);
           if (!timer) timer = setInterval(poll, 3000);
         })
-        .catch(function () { btn.disabled = false; out.textContent = 'Không gọi được máy chủ.'; });
+        .catch(function () {
+          // Stop the spinner too, or it turns forever over a scan that never
+          // started -- the one thing worse than no feedback is false feedback.
+          btn.disabled = false;
+          setBusy(false);
+          out.textContent = 'Không gọi được máy chủ.';
+        });
     });
 
     // A scan may already be running when the page loads.
