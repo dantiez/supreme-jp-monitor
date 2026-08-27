@@ -242,6 +242,10 @@ export function renderDashboard(
   <button type="submit">Lọc</button>
   <button type="button" id="scan-btn" class="scan">Quét ngay</button>
   <span id="scan-status" class="scan-status"></span>
+  <!-- Always present, not only after a scan that found something. The banner's
+       "Xem chi tiết" link appears only when there were changes, so without this
+       there is no way to reach the history from here on a quiet day. -->
+  <a class="btn" href="/changes">Xem thay đổi</a>
   <a class="btn" href="/export?format=csv${exportQuery ? '&' + exportQuery : ''}">Tải CSV</a>
   <a class="btn primary" href="/export?format=xlsx${exportQuery ? '&' + exportQuery : ''}">Tải Excel</a>
 </form>

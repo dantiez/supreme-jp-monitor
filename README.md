@@ -64,7 +64,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --no-notify` | Record changes without posting |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 87 tests |
+| `npm test` | Vitest: 88 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -134,6 +134,8 @@ Parser tests run against HTML captured from the live site. A fixture I wrote mys
 ## Two screens
 
 **`/` — what can I buy right now.** Two columns, green in stock and red not, one line per product-colour-size.
+
+A **Xem thay đổi** button sits in the dashboard toolbar and the changes page links back, so the two are reachable from each other at any time. The post-scan banner also links there, but only when a scan found something -- on a quiet day that alone would leave no way through.
 
 **`/changes` — what moved since the previous check.** Per SCAN, not per day. Scan 3 is compared with scan 2, scan 2 with scan 1. A daily baseline was considered and rejected: a size that sells out at 10:00 and returns at 14:00 looks identical to the morning snapshot at both 12:00 and 14:00, so the second restock never surfaces. Comparing against the previous run catches every transition.
 

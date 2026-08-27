@@ -327,3 +327,14 @@ describe('the sold-out column reports the last scan', () => {
     expect(html).not.toContain('không có thay đổi nào');
   });
 });
+
+describe('getting to the changes page', () => {
+  it('offers the link whether or not the last scan found anything', () => {
+    // The post-scan banner links there too, but only when there were changes.
+    // On a quiet day that leaves no way through.
+    for (const lastScanChanges of [null, 0, 4]) {
+      const html = renderDashboard([row({})], [], {}, { lastScanChanges });
+      expect(html).toContain('href="/changes"');
+    }
+  });
+});
