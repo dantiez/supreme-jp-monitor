@@ -11,7 +11,12 @@
 
 import { parseCataloguePage } from '../parsers/catalogue-parser.js';
 import { fetchPage, collectionPath } from './supreme-client.js';
-import { detectChanges, DetectedChange } from './change-detector.js';
+import {
+  detectChanges,
+  detectListingChanges,
+  DetectedChange,
+  ListingChange
+} from './change-detector.js';
 import { ScrapedProduct } from '../types.js';
 import * as repo from '../db/monitor-repository.js';
 import { notifyChanges } from '../notify/discord-notifier.js';
@@ -45,6 +50,8 @@ export interface ScanSummary {
   scanned: number;
   failed: number;
   changes: DetectedChange[];
+  /** Products that left or returned to the catalogue. Empty on a partial scan. */
+  listingChanges: ListingChange[];
   discovered: number;
   /** Per-collection discovery outcome. Empty `failed` is the healthy case. */
   discovery: DiscoveryResult;
@@ -133,6 +140,7 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
     scanned: 0,
     failed: 0,
     changes: [],
+    listingChanges: [],
     discovered: 0,
     discovery: { products: [], pagesRead: 0, declaredTotal: null, failed: [] }
   };
@@ -187,6 +195,34 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
 
       summary.changes.push(...changes);
       summary.scanned++;
+    }
+
+    // Products that vanished from the shop.
+    //
+    // ONLY ON A COMPLETE READ. A capped run, or one whose second listing page
+    // failed, did not establish that anything is gone -- it established that it
+    // did not look. Running this on a partial scan would delist hundreds of
+    // products at once and the alert would be indistinguishable from the shop
+    // actually clearing its catalogue.
+    const readEverything =
+      discovery.failed.length === 0 &&
+      capped.length === discovery.products.length &&
+      (discovery.declaredTotal === null ||
+        discovery.products.length >= discovery.declaredTotal);
+
+    if (readEverything) {
+      const seen = new Set(discovery.products.map((p) => p.handle));
+      const knownProducts = await repo.loadKnownProducts();
+      summary.listingChanges = detectListingChanges(seen, knownProducts);
+      await repo.applyListingChanges(summary.listingChanges);
+      if (summary.listingChanges.length > 0) {
+        console.log(`[scan] listing changes: ${summary.listingChanges.length}`);
+      }
+    } else {
+      console.log(
+        '[scan] partial read - skipping delist detection (it would report ' +
+          'products as gone that were simply not looked at)'
+      );
     }
 
     // The first run discovers the entire catalogue at once. Announcing several

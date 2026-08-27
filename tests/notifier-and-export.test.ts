@@ -109,6 +109,7 @@ function row(over: Partial<DashboardRow> = {}): DashboardRow {
     price: 15400, currency: 'JPY',
     status: 'AVAILABLE',
     url: 'https://jp.supreme.com/products/h1',
+    delisted_at: null,
     latest_event: 'RESTOCK',
     latest_event_at: '2026-08-17T02:00:00.000Z',
     first_seen_at: '2026-08-10T02:00:00.000Z',

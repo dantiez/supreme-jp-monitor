@@ -21,7 +21,11 @@ export type ChangeEvent =
   | 'NEW_VARIANT'
   | 'SOLD_OUT'
   | 'RESTOCK'
-  | 'PRICE_CHANGED';
+  | 'PRICE_CHANGED'
+  /** Was in the catalogue, is not any more. Not the same as sold out. */
+  | 'DELISTED'
+  /** A delisted product is back in the catalogue. */
+  | 'RELISTED';
 
 /** One size of one product, as read from the site right now. */
 export interface ScrapedVariant {

@@ -162,3 +162,68 @@ export function detectChanges(
 
   return changes;
 }
+
+/** A product the store no longer lists, or lists again. */
+export interface ListingChange {
+  handle: string;
+  productName: string;
+  color: string | null;
+  url: string;
+  event: 'DELISTED' | 'RELISTED';
+}
+
+/** What the database knows about a product, for reporting its disappearance. */
+export interface KnownProduct {
+  handle: string;
+  name: string;
+  color: string | null;
+  url: string;
+  /** Set when a previous scan found it gone. Null while it is listed. */
+  delistedAt: Date | null;
+}
+
+/**
+ * Products that vanished from the catalogue, and ones that came back.
+ *
+ * ONLY EVER CALL THIS ON A COMPLETE READ. A capped or partly-failed scan does
+ * not know that a product is gone -- it knows it did not look. Reporting the
+ * difference anyway would delist hundreds of products the moment someone runs
+ * a scan with `--max`, and the alert would be indistinguishable from a real
+ * catalogue purge. The caller enforces this; see scan-runner.
+ *
+ * Delisting is deliberately NOT modelled as selling out. Sold out means the
+ * shop still offers the item and has none; delisted means the shop no longer
+ * offers it. Collapsing them would make a withdrawn product look like one that
+ * might come back into stock.
+ */
+export function detectListingChanges(
+  seenHandles: ReadonlySet<string>,
+  knownProducts: readonly KnownProduct[]
+): ListingChange[] {
+  const changes: ListingChange[] = [];
+
+  for (const product of knownProducts) {
+    const isListed = seenHandles.has(product.handle);
+    const wasDelisted = product.delistedAt !== null;
+
+    if (!isListed && !wasDelisted) {
+      changes.push({
+        handle: product.handle,
+        productName: product.name,
+        color: product.color,
+        url: product.url,
+        event: 'DELISTED'
+      });
+    } else if (isListed && wasDelisted) {
+      changes.push({
+        handle: product.handle,
+        productName: product.name,
+        color: product.color,
+        url: product.url,
+        event: 'RELISTED'
+      });
+    }
+  }
+
+  return changes;
+}

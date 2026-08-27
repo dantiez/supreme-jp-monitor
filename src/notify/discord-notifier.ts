@@ -23,27 +23,36 @@ const MAX_EMBEDS = 10;
  */
 const EVENT_PRIORITY: Record<ChangeEvent, number> = {
   RESTOCK: 0,
-  NEW_PRODUCT: 1,
-  NEW_VARIANT: 2,
-  PRICE_CHANGED: 3,
-  SOLD_OUT: 4
+  RELISTED: 1,
+  NEW_PRODUCT: 2,
+  NEW_VARIANT: 3,
+  PRICE_CHANGED: 4,
+  SOLD_OUT: 5,
+  // Last: a withdrawn product is the least actionable thing in the list.
+  DELISTED: 6
 };
 
 const EVENT_LABEL: Record<ChangeEvent, string> = {
   RESTOCK: 'Back in stock',
+  RELISTED: 'Listed again',
   NEW_PRODUCT: 'New product',
   NEW_VARIANT: 'New size',
   PRICE_CHANGED: 'Price changed',
-  SOLD_OUT: 'Sold out'
+  SOLD_OUT: 'Sold out',
+  // "Removed", not "sold out": the shop no longer offers it at all, which is a
+  // different fact from having none in stock.
+  DELISTED: 'Removed from the site'
 };
 
 /** Discord embed colours, chosen so the event type is readable at a glance. */
 const EVENT_COLOR: Record<ChangeEvent, number> = {
   RESTOCK: 0x2ecc71,
+  RELISTED: 0x27ae60,
   NEW_PRODUCT: 0x3498db,
   NEW_VARIANT: 0x1abc9c,
   PRICE_CHANGED: 0xf1c40f,
-  SOLD_OUT: 0x95a5a6
+  SOLD_OUT: 0x95a5a6,
+  DELISTED: 0x7f8c8d
 };
 
 export interface DiscordEmbed {

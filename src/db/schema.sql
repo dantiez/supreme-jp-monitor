@@ -34,7 +34,10 @@ CREATE TABLE IF NOT EXISTS supreme_monitor.products (
   image_url     text,
   url           text        NOT NULL,
   first_seen_at timestamptz NOT NULL DEFAULT now(),
-  last_seen_at  timestamptz NOT NULL DEFAULT now()
+  last_seen_at  timestamptz NOT NULL DEFAULT now(),
+  -- Set when a COMPLETE catalogue read no longer contained this product.
+  -- Distinct from every size being sold out: the shop has withdrawn it.
+  delisted_at   timestamptz
 );
 
 CREATE INDEX IF NOT EXISTS products_style_idx ON supreme_monitor.products (style);
@@ -101,6 +104,16 @@ CREATE INDEX IF NOT EXISTS scan_runs_started_idx ON supreme_monitor.scan_runs (s
 -- fact USD are now indistinguishable from JPY. They are dropped rather than
 -- guessed: an unknown price is honest, a confidently mislabelled one is not,
 -- and the next scan refills every row it can still reach.
+-- MIGRATIONS RUN BEFORE ANYTHING THAT DEPENDS ON THEM.
+-- This file is executed as one statement batch, so a single failure aborts the
+-- rest of it. An index on delisted_at placed up with the other index
+-- definitions failed on an existing database -- the column was not there yet --
+-- which aborted the batch before reaching the ALTER that would have added it.
+-- Self-inflicted deadlock: the fix could never run because the thing it fixed
+-- had already broken the run.
+ALTER TABLE supreme_monitor.products ADD COLUMN IF NOT EXISTS delisted_at timestamptz;
+CREATE INDEX IF NOT EXISTS products_delisted_idx ON supreme_monitor.products (delisted_at);
+
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns

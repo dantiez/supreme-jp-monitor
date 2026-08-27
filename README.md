@@ -22,7 +22,11 @@ Supreme's Shopify JSON APIs (`/products.json`, `/api/graphql.json`) **are** clos
 
 That is not a simplification — it is what Supreme does. Each colourway is its own product, carrying `"color":"Orange"` at product level with `"options":["Size"]`. Modelling colour as a variant axis would mean inventing a dimension the source does not have.
 
-Events: `NEW_PRODUCT` · `NEW_VARIANT` · `SOLD_OUT` · `RESTOCK` · `PRICE_CHANGED`
+Events: `NEW_PRODUCT` · `NEW_VARIANT` · `SOLD_OUT` · `RESTOCK` · `PRICE_CHANGED` · `DELISTED` · `RELISTED`
+
+**Delisted is not sold out.** Sold out means the shop still offers the item and has none; delisted means the shop no longer offers it. Collapsing them would make a withdrawn product look like one that might come back.
+
+**Delisting is only detected on a complete read.** A capped or partly-failed scan has not established that anything is gone — only that it did not look. Running the check anyway would withdraw hundreds of products the moment someone passes `--max`, and the alert would be indistinguishable from a real catalogue purge.
 
 **Nothing is ever deleted when it sells out.** A sold-out size keeps its row so its return is recognised as a RESTOCK rather than a first sighting. That single rule is the reason the tool exists.
 
@@ -118,6 +122,16 @@ tests/fixtures/                     real captured HTML, not hand-written
 ```
 
 Parser tests run against HTML captured from the live site. A fixture I wrote myself would only prove the parser matches my assumptions.
+
+---
+
+## Two screens
+
+**`/` — what can I buy right now.** Two columns, green in stock and red not, one line per product-colour-size.
+
+**`/changes` — what moved since the previous check.** Per SCAN, not per day. Scan 3 is compared with scan 2, scan 2 with scan 1. A daily baseline was considered and rejected: a size that sells out at 10:00 and returns at 14:00 looks identical to the morning snapshot at both 12:00 and 14:00, so the second restock never surfaces. Comparing against the previous run catches every transition.
+
+The very first scan has nothing before it, so it lists what is in stock rather than an empty diff — an empty diff would read as "nothing changed" when the truth is "there was nothing to compare to".
 
 ---
 

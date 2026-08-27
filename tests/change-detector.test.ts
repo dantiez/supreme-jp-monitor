@@ -5,8 +5,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   detectChanges,
+  detectListingChanges,
   variantKey,
-  KnownVariant
+  KnownVariant,
+  KnownProduct
 } from '../src/core/change-detector.js';
 import { ScrapedProduct, ScrapedVariant, StockStatus } from '../src/types.js';
 
@@ -199,5 +201,50 @@ describe('PRICE_CHANGED', () => {
       known({ status: 'AVAILABLE', price: 15400, currency: 'JPY' })
     ).map((c) => c.event);
     expect(events).toEqual(['SOLD_OUT', 'PRICE_CHANGED']);
+  });
+});
+
+describe('DELISTED and RELISTED', () => {
+  const known = (over: Partial<KnownProduct> = {}): KnownProduct => ({
+    handle: 'h1',
+    name: 'Box Logo Tee',
+    color: 'Black',
+    url: 'https://jp.supreme.com/products/h1',
+    delistedAt: null,
+    ...over
+  });
+
+  it('reports a product that is no longer in the catalogue', () => {
+    const changes = detectListingChanges(new Set(), [known()]);
+    expect(changes.map((c) => c.event)).toEqual(['DELISTED']);
+  });
+
+  it('reports a delisted product that came back', () => {
+    const changes = detectListingChanges(
+      new Set(['h1']),
+      [known({ delistedAt: new Date('2026-08-27T00:00:00Z') })]
+    );
+    expect(changes.map((c) => c.event)).toEqual(['RELISTED']);
+  });
+
+  it('stays silent while a listed product stays listed', () => {
+    expect(detectListingChanges(new Set(['h1']), [known()])).toEqual([]);
+  });
+
+  it('does not report the same delisting twice', () => {
+    // Already flagged on an earlier scan; repeating it every two hours would
+    // bury the channel in news about something that left days ago.
+    const changes = detectListingChanges(
+      new Set(),
+      [known({ delistedAt: new Date('2026-08-27T00:00:00Z') })]
+    );
+    expect(changes).toEqual([]);
+  });
+
+  it('carries the name, colour and URL so the report is readable', () => {
+    const [change] = detectListingChanges(new Set(), [known()]);
+    expect(change!.productName).toBe('Box Logo Tee');
+    expect(change!.color).toBe('Black');
+    expect(change!.url).toContain('jp.supreme.com');
   });
 });
