@@ -16,6 +16,7 @@ import {
 import { renderDashboard } from './dashboard-page.js';
 import { renderChangesPage } from './changes-page.js';
 import { startScan, getScanState } from './scan-controller.js';
+import { createDashboardAuth, MissingPasswordError } from './dashboard-basic-auth.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3100);
@@ -23,6 +24,35 @@ const PORT = Number(process.env.PORT ?? 3100);
 // Loopback by default so a local run is not exposed on the network. A platform
 // like Render injects PORT and needs 0.0.0.0 to route traffic to the container.
 const HOST = process.env.HOST ?? '127.0.0.1';
+
+// Guards every route, the scan trigger included -- an unprotected URL would let
+// a stranger start hundred-second scans against Supreme and the database, which
+// is a heavier gift than read access.
+//
+// Registered here, above the routes, so a route added later is covered by
+// default. Opting out has to be deliberate.
+let dashboardAuth;
+try {
+  dashboardAuth = createDashboardAuth({
+    password: process.env.DASHBOARD_PASSWORD,
+    host: HOST
+  });
+} catch (e) {
+  if (e instanceof MissingPasswordError) {
+    // A stack trace would bury the one sentence that matters.
+    console.error(`\n[auth] ${e.message}\n`);
+    process.exit(1);
+  }
+  throw e;
+}
+
+// The platform probes this before it will route traffic, and it holds no
+// credentials. It answers liveness and nothing else, so it stays open.
+app.get('/healthz', (_req, res) => {
+  res.json({ ok: true });
+});
+
+app.use(dashboardAuth);
 
 /** Only these reach a WHERE clause; anything else is ignored, not interpolated. */
 const STATUSES = new Set(['AVAILABLE', 'SOLD_OUT', 'UNKNOWN']);
@@ -57,10 +87,6 @@ app.post('/api/scan', express.json(), (_req, res) => {
 
 app.get('/api/scan/status', (_req, res) => {
   res.json(getScanState());
-});
-
-app.get('/healthz', (_req, res) => {
-  res.status(200).send('ok');
 });
 
 app.get('/', async (req, res) => {
@@ -171,13 +197,9 @@ app.listen(PORT, HOST, () => {
   if (!process.env.DATABASE_URL) {
     console.warn('[db] DATABASE_URL is not set. The dashboard will error until it is.');
   }
-  // Say it out loud rather than leaving it to be discovered. This dashboard has
-  // no authentication: on a public HOST, anyone with the URL reads the data.
-  if (HOST !== '127.0.0.1' && HOST !== 'localhost' && !process.env.ALLOW_PUBLIC_DASHBOARD) {
-    console.warn(
-      '[auth] Bound to a public interface with NO authentication. Anyone with ' +
-        'the URL can read the dashboard and download the export. Set ' +
-        'ALLOW_PUBLIC_DASHBOARD=1 to acknowledge, or add a password first.'
-    );
-  }
+  console.log(
+    process.env.DASHBOARD_PASSWORD
+      ? '[auth] Password required.'
+      : '[auth] No password -- loopback only.'
+  );
 });

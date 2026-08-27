@@ -1,0 +1,39 @@
+# Render blueprint for the dashboard.
+#
+# The scan runs inside this service, started by the button, so this is a web
+# service and not a cron job -- there is no schedule any more.
+#
+# FREE PLAN, KNOWINGLY: the instance is stopped after about 15 minutes with no
+# traffic, so the first page load after a quiet spell waits ~30-60s for it to
+# start before the ~100s scan can even begin. Nothing is lost -- state lives in
+# Neon, not on the instance -- but the wait is real. `plan: starter` removes it.
+services:
+  - type: web
+    name: supreme-jp-monitor
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm start
+    # Probed before traffic is routed, and it carries no credentials, so this
+    # one path is left outside the password.
+    healthCheckPath: /healthz
+    envVars:
+      # Render routes to the container by IP; loopback would refuse every
+      # request from outside it.
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_VERSION
+        value: "22"
+      # sync: false means "ask me, never store it here". These are secrets and
+      # this file is in git.
+      - key: DATABASE_URL
+        sync: false
+      # Without this the server refuses to start on a public host, which is the
+      # intended behaviour -- not an oversight to work around.
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: DISPLAY_TIMEZONE
+        value: Asia/Tokyo
