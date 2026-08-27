@@ -17,6 +17,9 @@ import { renderDashboard } from './dashboard-page.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3100);
+
+// Loopback by default so a local run is not exposed on the network. A platform
+// like Render injects PORT and needs 0.0.0.0 to route traffic to the container.
 const HOST = process.env.HOST ?? '127.0.0.1';
 
 /** Only these reach a WHERE clause; anything else is ignored, not interpolated. */
@@ -82,5 +85,14 @@ app.listen(PORT, HOST, () => {
   console.log(`Supreme JP monitor dashboard on http://${HOST}:${PORT}`);
   if (!process.env.DATABASE_URL) {
     console.warn('[db] DATABASE_URL is not set. The dashboard will error until it is.');
+  }
+  // Say it out loud rather than leaving it to be discovered. This dashboard has
+  // no authentication: on a public HOST, anyone with the URL reads the data.
+  if (HOST !== '127.0.0.1' && HOST !== 'localhost' && !process.env.ALLOW_PUBLIC_DASHBOARD) {
+    console.warn(
+      '[auth] Bound to a public interface with NO authentication. Anyone with ' +
+        'the URL can read the dashboard and download the export. Set ' +
+        'ALLOW_PUBLIC_DASHBOARD=1 to acknowledge, or add a password first.'
+    );
   }
 });

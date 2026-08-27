@@ -56,7 +56,8 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --max=50` | Cap products checked (listing order is newest-first) |
 | `npm run scan -- --no-notify` | Record changes without posting |
 | `npm run scan -- --collections=new,jackets` | Restrict discovery |
-| `npm run dev` | Dashboard + export |
+| `npm run dev` | Dashboard + export (local) |
+| `npm start` | Same, for a hosting platform |
 | `npm test` | Vitest: 58 tests |
 | `npm run lint` | `tsc --noEmit` |
 
@@ -73,6 +74,25 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 Secrets required on the repo: `DATABASE_URL`, `DISCORD_WEBHOOK_URL`.
 
 Runs are serialised (`concurrency: supreme-scan`). Two overlapping scans would compare against a half-written "before" and report the other run's writes as changes.
+
+---
+
+## Deploying the dashboard (optional)
+
+**The monitor does not need a web host.** Scanning runs on GitHub Actions and alerts go to Discord; the dashboard only *reads* what the scan already stored. Deploy it if you want to browse and export from anywhere, and skip it otherwise.
+
+Because nothing is scheduled here, **a free tier is enough** — a sleeping dashboard costs a slow first load and nothing else. Paying to keep it awake buys faster page loads, not extra capability. That separation is the whole reason the cron lives in Actions.
+
+On Render: build `npm ci`, start `npm start`, and set:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | the Neon connection string |
+| `HOST` | `0.0.0.0` — the container is unreachable on loopback |
+
+`PORT` is injected. `DISCORD_WEBHOOK_URL` is **not** needed here; only the scanner posts.
+
+**The dashboard has no authentication.** On a public host, anyone with the URL can read it and download the export. The server warns loudly at boot unless `ALLOW_PUBLIC_DASHBOARD=1` acknowledges it. Add a password before exposing anything you would not publish.
 
 ---
 
@@ -117,7 +137,7 @@ Columns: `Product Name · Product URL · Category · Color · Size · SKU · Pri
 
 - **Discovery is limited to the configured collections** (`new`, `jackets`, `shirts`, …). A product in no listed collection is never found. `/collections/new` alone returns ~241 products.
 - **No per-size history chart.** Every change is stored in `change_events`; nothing plots it yet.
-- **The dashboard has no auth.** Fine on loopback; it needs a password before it is exposed.
+- **The dashboard has no auth.** Fine on loopback; it needs a password before it is exposed. The server warns at boot on a public bind.
 - **Alerts cap at 10 embeds per message**, with the overflow counted in the summary line rather than dropped silently.
 - **Scan duration is bounded by politeness, not by code.** ~240 products at 800ms is roughly 3–4 minutes; a full sweep across all collections is longer.
 
