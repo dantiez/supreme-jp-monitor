@@ -40,12 +40,30 @@ async function main(): Promise<void> {
     `[scan] done in ${seconds}s: discovered ${summary.discovered}, ` +
       `checked ${summary.scanned}, failed ${summary.failed}, changes ${summary.changes.length}`
   );
+  console.log(
+    `[scan] collections ok: ` +
+      (summary.discovery.succeeded.map((s) => s.collection).join(', ') || '(none)')
+  );
   for (const [event, n] of byEvent) console.log(`         ${event}: ${n}`);
 
   // A scan where nothing could be read is a failure, not a quiet success --
   // exit non-zero so the Actions run goes red instead of looking healthy.
   if (summary.scanned === 0 && summary.discovered > 0) {
     throw new Error('Discovered products but could not read any of them.');
+  }
+
+  // A partial discovery is also a failure, and this is the one that bit us in
+  // production: /collections/new timed out, discovery silently fell through to
+  // jackets, and a green run announced thirty "new products" that were just
+  // the first jackets nobody had recorded. Totals looked entirely normal. Go
+  // red so the gap is seen on the day it happens, not weeks later when someone
+  // wonders why a drop was never announced.
+  if (summary.discovery.failed.length > 0) {
+    throw new Error(
+      `Collections could not be read: ` +
+        summary.discovery.failed.map((f) => `${f.collection} (${f.error})`).join(', ') +
+        `. Their products were NOT checked; results are incomplete.`
+    );
   }
 }
 

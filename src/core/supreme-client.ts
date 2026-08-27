@@ -21,7 +21,10 @@ const USER_AGENT =
 /** Gap between requests. Serialised, so this is the effective rate. */
 const REQUEST_DELAY_MS = Number(process.env.REQUEST_DELAY_MS ?? 800);
 
-const REQUEST_TIMEOUT_MS = 20_000;
+// Collection listings are large -- /collections/new is roughly 1 MB -- and a
+// 20s ceiling silently timed them out on a slower link, which is how a scan
+// ended up monitoring the wrong collection while reporting success.
+const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS ?? 60_000);
 const MAX_ATTEMPTS = 3;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

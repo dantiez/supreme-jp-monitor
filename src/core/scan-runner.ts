@@ -35,27 +35,53 @@ export interface ScanSummary {
   failed: number;
   changes: DetectedChange[];
   discovered: number;
+  /** Per-collection discovery outcome. Empty `failed` is the healthy case. */
+  discovery: DiscoveryResult;
 }
 
-/** Discover handles across the configured collections, de-duplicated. */
-async function discoverHandles(collections: string[]): Promise<string[]> {
+export interface DiscoveryResult {
+  handles: string[];
+  /** Collections that answered, with how many handles each contributed. */
+  succeeded: Array<{ collection: string; found: number }>;
+  failed: Array<{ collection: string; error: string }>;
+}
+
+/**
+ * Discover handles across the configured collections, de-duplicated.
+ *
+ * WHY THE PER-COLLECTION RESULT IS RETURNED RATHER THAN LOGGED AND FORGOTTEN:
+ * a failed collection used to be a lone console.warn, so a run where the FIRST
+ * collection failed still reported "ok" -- having quietly monitored whatever
+ * collection came next. That happened in production: /collections/new timed
+ * out, discovery fell through to jackets, and the alert announced thirty
+ * "new products" that were simply the first jackets nobody had recorded yet.
+ * Which collections answered is now part of the scan's result and its summary.
+ */
+async function discoverHandles(collections: string[]): Promise<DiscoveryResult> {
   const handles: string[] = [];
   const seen = new Set<string>();
+  const succeeded: DiscoveryResult['succeeded'] = [];
+  const failed: DiscoveryResult['failed'] = [];
 
   for (const collection of collections) {
     const res = await fetchPage(collectionPath(collection));
     if (!res.ok) {
-      console.warn(`[scan] collection "${collection}" failed: ${res.error}`);
+      console.error(`[scan] FAILED collection "${collection}": ${res.error}`);
+      failed.push({ collection, error: res.error });
       continue;
     }
+
+    let found = 0;
     for (const handle of parseCollectionPage(res.html)) {
       if (seen.has(handle)) continue;
       seen.add(handle);
       handles.push(handle);
+      found++;
     }
+    succeeded.push({ collection, found });
   }
 
-  return handles;
+  return { handles, succeeded, failed };
 }
 
 export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
@@ -65,16 +91,49 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
   await repo.ensureReady();
   const runId = await repo.startScanRun();
 
-  const summary: ScanSummary = { scanned: 0, failed: 0, changes: [], discovered: 0 };
+  const summary: ScanSummary = {
+    scanned: 0,
+    failed: 0,
+    changes: [],
+    discovered: 0,
+    discovery: { handles: [], succeeded: [], failed: [] }
+  };
 
   try {
-    const handles = await discoverHandles(collections);
+    const discovery = await discoverHandles(collections);
+    const handles = discovery.handles;
+    summary.discovery = discovery;
     summary.discovered = handles.length;
+
+    for (const s of discovery.succeeded) {
+      console.log(`[scan] collection "${s.collection}": ${s.found} new handle(s)`);
+    }
+
+    // Losing every collection means the scan looked at nothing. Reporting "ok"
+    // here would make a total outage indistinguishable from a quiet day.
+    if (discovery.succeeded.length === 0) {
+      throw new Error(
+        `No collection could be read (${discovery.failed
+          .map((f) => `${f.collection}: ${f.error}`)
+          .join('; ')})`
+      );
+    }
 
     const capped =
       options.maxProducts && options.maxProducts > 0
         ? handles.slice(0, options.maxProducts)
         : handles;
+
+    // A cap plus a missing collection is the dangerous combination: the run
+    // checks a full quota of products, none of which are the ones the failed
+    // collection would have supplied, and nothing about the totals looks wrong.
+    if (discovery.failed.length > 0) {
+      console.error(
+        `[scan] ${discovery.failed.length} collection(s) FAILED: ` +
+          discovery.failed.map((f) => f.collection).join(', ') +
+          '. Products they list were not checked this run.'
+      );
+    }
 
     if (capped.length < handles.length) {
       // Stated, never silent: a capped run that looked complete would make
