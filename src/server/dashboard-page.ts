@@ -86,6 +86,17 @@ export interface DashboardFilters {
   category?: string;
 }
 
+export interface DashboardMeta {
+  /**
+   * Changes found by the most recent finished scan.
+   *
+   * Null when no scan has completed. Zero and null are kept apart on purpose:
+   * "the last check found nothing" and "nothing has been checked" look the
+   * same on screen otherwise, and only one of them is reassuring.
+   */
+  lastScanChanges: number | null;
+}
+
 function renderLine(row: DashboardRow): string {
   const text = buildLineText(row);
   const thumb = thumbnailUrl(row.image_url);
@@ -103,9 +114,15 @@ function renderLine(row: DashboardRow): string {
 </li>`;
 }
 
-function renderColumn(title: string, tone: 'ok' | 'out', rows: DashboardRow[]): string {
+function renderColumn(
+  title: string,
+  tone: 'ok' | 'out',
+  rows: DashboardRow[],
+  note?: string
+): string {
   return `<section class="col ${tone}">
   <h2><span class="dot"></span>${escapeHtml(title)} <span class="count">${rows.length}</span></h2>
+  ${note ? `<p class="col-note">${escapeHtml(note)}</p>` : ''}
   ${
     rows.length === 0
       ? '<p class="empty">Không có mục nào.</p>'
@@ -117,7 +134,8 @@ function renderColumn(title: string, tone: 'ok' | 'out', rows: DashboardRow[]): 
 export function renderDashboard(
   rows: DashboardRow[],
   categories: string[],
-  filters: DashboardFilters
+  filters: DashboardFilters,
+  meta: DashboardMeta = { lastScanChanges: null }
 ): string {
   const query = new URLSearchParams();
   if (filters.status) query.set('status', filters.status);
@@ -131,6 +149,14 @@ export function renderDashboard(
   // red column would tell the reader an item is gone when nobody established
   // that, so it gets its own line rather than being folded into either side.
   const unknown = rows.filter((r) => r.status === 'UNKNOWN');
+
+  // The list below is current stock, not a diff, so it is never empty and the
+  // "nothing changed" news would otherwise have nowhere to appear. Stated as a
+  // note above the column rather than in place of it.
+  const soldOutNote =
+    meta.lastScanChanges === 0
+      ? 'Lần quét gần nhất: không có thay đổi nào.'
+      : undefined;
 
   const lastChecked = rows.reduce<string | null>(
     (latest, r) => (!latest || r.last_checked_at > latest ? r.last_checked_at : latest),
@@ -181,6 +207,7 @@ export function renderDashboard(
   .scan { background:#15803d; color:#fff; border-color:#15803d; cursor:pointer; }
   .scan:disabled { background:#9ccbaa; border-color:#9ccbaa; cursor:default; }
   .scan-status { font-size:12px; color:#666; }
+  .col-note { margin:-4px 0 10px; font-size:13px; color:#666; background:#f6f8f6; border:1px solid #e4eae4; border-radius:6px; padding:6px 10px; }
   /* A result with changes must not look like a result without any. Someone who
      has listed these items for resale needs to notice, not scan past. */
   #scan-result { display:none; padding:12px 22px; border-bottom:1px solid #eee; font-size:14px; }
@@ -215,6 +242,10 @@ export function renderDashboard(
   <button type="submit">Lọc</button>
   <button type="button" id="scan-btn" class="scan">Quét ngay</button>
   <span id="scan-status" class="scan-status"></span>
+  <!-- Always present, not only after a scan that found something. The banner's
+       "Xem chi tiết" link appears only when there were changes, so without this
+       there is no way to reach the history from here on a quiet day. -->
+  <a class="btn" href="/changes">Xem thay đổi</a>
   <a class="btn" href="/export?format=csv${exportQuery ? '&' + exportQuery : ''}">Tải CSV</a>
   <a class="btn primary" href="/export?format=xlsx${exportQuery ? '&' + exportQuery : ''}">Tải Excel</a>
 </form>
@@ -223,7 +254,7 @@ export function renderDashboard(
 
 <main>
   ${renderColumn('Còn hàng', 'ok', available)}
-  ${renderColumn('Hết hàng', 'out', soldOut)}
+  ${renderColumn('Hết hàng', 'out', soldOut, soldOutNote)}
 </main>
 
 ${

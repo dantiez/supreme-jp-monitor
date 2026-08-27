@@ -70,8 +70,21 @@ app.get('/', async (req, res) => {
       repo.loadDashboardRows(filters),
       repo.loadCategories()
     ]);
+
+    // Taken from the in-process scan first: it is the run the reader just
+    // triggered. Falling back to the stored history covers a fresh server that
+    // has not scanned yet but has scans behind it.
+    const state = getScanState();
+    let lastScanChanges: number | null = state.last
+      ? state.last.changes + state.last.listingChanges
+      : null;
+    if (lastScanChanges === null) {
+      const [recent] = await repo.loadRecentScans(1);
+      lastScanChanges = recent ? recent.changes_detected : null;
+    }
+
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(renderDashboard(rows, categories, filters));
+    res.send(renderDashboard(rows, categories, filters, { lastScanChanges }));
   } catch (e) {
     // Say what broke. A blank dashboard reads as "nothing is in stock".
     res.status(500).send(

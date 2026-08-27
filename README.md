@@ -64,7 +64,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --no-notify` | Record changes without posting |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 58 tests |
+| `npm test` | Vitest: 88 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -78,6 +78,10 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 The button starts the work and returns immediately; the page polls, because a full read takes roughly 100 seconds and holding a request open that long invites the browser or a proxy to give up while the scan carries on writing.
 
 **The result is reported in terms the reader acts on.** A scan that finds something shows a banner naming what moved — "Mất hàng: 4 vừa hết hàng" — rather than a bare total. A single number is not actionable: four changes could be four restocks or four sell-outs, and for someone who has already listed these items for resale those are opposite pieces of news, one meaning stock to buy and the other a listing to pull. Reloading the list is offered as a button, never forced, since the reader may be part-way through copying a line.
+
+**A scan that finds nothing says so, on the sold-out side.** The red column lists current stock rather than a diff, so it is never empty and the good news would otherwise have nowhere to land; it appears as a note above the list. "The last check found nothing" and "nothing has been checked yet" are kept apart, because only one of them is reassuring.
+
+**The stored change count includes delistings.** A scan whose only news is that two products were pulled from the site has changed something. Recording zero would let the dashboard issue a false all-clear while stock vanished.
 
 **One scan at a time.** A second click during a run is refused, not queued — a queued scan would compare against state the first one is still writing and report its predecessor's work as changes.
 
@@ -130,6 +134,8 @@ Parser tests run against HTML captured from the live site. A fixture I wrote mys
 ## Two screens
 
 **`/` — what can I buy right now.** Two columns, green in stock and red not, one line per product-colour-size.
+
+A **Xem thay đổi** button sits in the dashboard toolbar and the changes page links back, so the two are reachable from each other at any time. The post-scan banner also links there, but only when a scan found something -- on a quiet day that alone would leave no way through.
 
 **`/changes` — what moved since the previous check.** Per SCAN, not per day. Scan 3 is compared with scan 2, scan 2 with scan 1. A daily baseline was considered and rejected: a size that sells out at 10:00 and returns at 14:00 looks identical to the morning snapshot at both 12:00 and 14:00, so the second restock never surfaces. Comparing against the previous run catches every transition.
 

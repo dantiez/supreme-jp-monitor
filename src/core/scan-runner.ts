@@ -238,10 +238,14 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
       console.log(`[scan] first run: ${summary.changes.length} products recorded, notification suppressed`);
     }
 
+    // Listing changes count too. A scan whose only news is that two products
+    // were pulled from the site has changed something; recording 0 would let
+    // the dashboard tell the reader "nothing changed" while stock vanished --
+    // a false all-clear is worse than no message at all.
     await repo.finishScanRun(runId, {
       scanned: summary.scanned,
       failed: summary.failed,
-      changes: summary.changes.length,
+      changes: summary.changes.length + summary.listingChanges.length,
       status: 'ok'
     });
 
@@ -250,7 +254,7 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
     await repo.finishScanRun(runId, {
       scanned: summary.scanned,
       failed: summary.failed,
-      changes: summary.changes.length,
+      changes: summary.changes.length + summary.listingChanges.length,
       status: 'failed',
       error: (e as Error).message
     });
