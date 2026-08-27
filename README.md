@@ -77,6 +77,8 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 
 The button starts the work and returns immediately; the page polls, because a full read takes roughly 100 seconds and holding a request open that long invites the browser or a proxy to give up while the scan carries on writing.
 
+**The result is reported in terms the reader acts on.** A scan that finds something shows a banner naming what moved — "Mất hàng: 4 vừa hết hàng" — rather than a bare total. A single number is not actionable: four changes could be four restocks or four sell-outs, and for someone who has already listed these items for resale those are opposite pieces of news, one meaning stock to buy and the other a listing to pull. Reloading the list is offered as a button, never forced, since the reader may be part-way through copying a line.
+
 **One scan at a time.** A second click during a run is refused, not queued — a queued scan would compare against state the first one is still writing and report its predecessor's work as changes.
 
 `workflow_dispatch` still exists in the workflow for running a scan without the dashboard up. It needs `DATABASE_URL` and `DISCORD_WEBHOOK_URL` as repo secrets.

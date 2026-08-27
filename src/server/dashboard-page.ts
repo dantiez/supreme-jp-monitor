@@ -181,6 +181,15 @@ export function renderDashboard(
   .scan { background:#15803d; color:#fff; border-color:#15803d; cursor:pointer; }
   .scan:disabled { background:#9ccbaa; border-color:#9ccbaa; cursor:default; }
   .scan-status { font-size:12px; color:#666; }
+  /* A result with changes must not look like a result without any. Someone who
+     has listed these items for resale needs to notice, not scan past. */
+  #scan-result { display:none; padding:12px 22px; border-bottom:1px solid #eee; font-size:14px; }
+  #scan-result.show { display:block; }
+  #scan-result.changed { background:#fff7e6; border-bottom-color:#f0d9a0; }
+  #scan-result.quiet { background:#f6f8f6; color:#555; }
+  #scan-result .lost { color:#b91c1c; font-weight:600; }
+  #scan-result .gained { color:#15803d; font-weight:600; }
+  #scan-result a, #scan-result button { margin-left:10px; font-size:13px; }
   .note { padding:12px 22px; color:#9a6b00; background:#fff8e6; border-top:1px solid #f0e0b0; font-size:13px; }
 </style>
 </head>
@@ -210,6 +219,8 @@ export function renderDashboard(
   <a class="btn primary" href="/export?format=xlsx${exportQuery ? '&' + exportQuery : ''}">Tải Excel</a>
 </form>
 
+<div id="scan-result"></div>
+
 <main>
   ${renderColumn('Còn hàng', 'ok', available)}
   ${renderColumn('Hết hàng', 'out', soldOut)}
@@ -231,20 +242,78 @@ ${
     if (!btn || !out) return;
     var timer = null;
 
+    var banner = document.getElementById('scan-result');
+
+    // Names the reader thinks in, not the event codes the database stores.
+    var LOST = { SOLD_OUT: 'vừa hết hàng', DELISTED: 'bị gỡ khỏi sàn' };
+    var GAINED = { RESTOCK: 'có hàng lại', RELISTED: 'lên lại sàn',
+                   NEW_PRODUCT: 'sản phẩm mới', NEW_VARIANT: 'size mới' };
+
+    function parts(map, byEvent) {
+      var out = [];
+      for (var key in map) {
+        if (byEvent[key]) out.push(byEvent[key] + ' ' + map[key]);
+      }
+      return out;
+    }
+
+    function showResult(l) {
+      if (!banner) return;
+      if (!l.ok) {
+        banner.className = 'show changed';
+        banner.innerHTML = '<span class="lost">Lần quét LỖI:</span> ' + (l.error || 'không rõ');
+        return;
+      }
+
+      var lost = parts(LOST, l.byEvent || {});
+      var gained = parts(GAINED, l.byEvent || {});
+      var priced = (l.byEvent || {}).PRICE_CHANGED || 0;
+
+      if (!lost.length && !gained.length && !priced) {
+        // Said plainly rather than left blank: "nothing changed" is a real
+        // answer, and a blank banner reads as the scan not having run.
+        banner.className = 'show quiet';
+        banner.textContent = 'Đã quét ' + l.scanned + ' sản phẩm — không có gì thay đổi so với lần trước.';
+        return;
+      }
+
+      var html = '';
+      if (lost.length) html += '<span class="lost">Mất hàng: ' + lost.join(', ') + '</span>. ';
+      if (gained.length) html += '<span class="gained">Thêm hàng: ' + gained.join(', ') + '</span>. ';
+      if (priced) html += priced + ' món đổi giá. ';
+      html += '<a href="/changes">Xem chi tiết</a>' +
+              '<button type="button" id="reload-btn">Tải lại danh sách</button>';
+
+      banner.className = 'show changed';
+      banner.innerHTML = html;
+      var rb = document.getElementById('reload-btn');
+      // Reloading is offered, never forced: the reader may be part-way through
+      // copying a line, and yanking the page out from under them to show a
+      // fresher one is not an improvement.
+      if (rb) rb.addEventListener('click', function () { location.reload(); });
+    }
+
     function describe(state) {
       if (state.running) return 'Đang quét… (khoảng 100 giây)';
       if (!state.last) return '';
       var l = state.last;
-      if (!l.ok) return 'Lần quét trước LỖI: ' + (l.error || 'không rõ');
-      var secs = Math.round(l.durationMs / 1000);
-      return 'Xong sau ' + secs + 's · ' + l.scanned + ' sản phẩm · ' +
-        (l.changes + l.listingChanges) + ' thay đổi. Tải lại trang để xem.';
+      if (!l.ok) return 'Lần quét trước lỗi.';
+      return 'Xong sau ' + Math.round(l.durationMs / 1000) + 's.';
     }
+
+    var shownFinish = null;
 
     function render(state) {
       btn.disabled = state.running;
       btn.textContent = state.running ? 'Đang quét…' : 'Quét ngay';
       out.textContent = describe(state);
+
+      // Only announce a result once. Polling repeats the same finished state,
+      // and re-rendering it would reset the banner while it is being read.
+      if (!state.running && state.last && state.last.finishedAt !== shownFinish) {
+        shownFinish = state.last.finishedAt;
+        showResult(state.last);
+      }
       if (!state.running && timer) { clearInterval(timer); timer = null; }
     }
 

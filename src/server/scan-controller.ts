@@ -28,8 +28,26 @@ export interface ScanState {
     failed: number;
     changes: number;
     listingChanges: number;
+    /**
+     * Count per event type.
+     *
+     * A single total is not actionable: "4 changes" could be four restocks or
+     * four sell-outs, and for someone who has already listed these items for
+     * resale those are opposite pieces of news -- one means stock to buy, the
+     * other means a listing to pull.
+     */
+    byEvent: Record<string, number>;
     error: string | null;
   } | null;
+}
+
+/** Tally every event this scan produced, variant and listing alike. */
+function countByEvent(summary: ScanSummary | null): Record<string, number> {
+  const counts: Record<string, number> = {};
+  if (!summary) return counts;
+  for (const c of summary.changes) counts[c.event] = (counts[c.event] ?? 0) + 1;
+  for (const c of summary.listingChanges) counts[c.event] = (counts[c.event] ?? 0) + 1;
+  return counts;
 }
 
 let running = false;
@@ -77,6 +95,7 @@ export function startScan(): StartResult {
         failed: summary?.failed ?? 0,
         changes: summary?.changes.length ?? 0,
         listingChanges: summary?.listingChanges.length ?? 0,
+        byEvent: countByEvent(summary),
         error
       };
       running = false;
