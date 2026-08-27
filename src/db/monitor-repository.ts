@@ -159,6 +159,7 @@ export interface DashboardRow {
   name: string;
   color: string | null;
   category: string | null;
+  image_url: string | null;
   size: string;
   sku: string | null;
   price: number | null;
@@ -200,7 +201,7 @@ export async function loadDashboardRows(filters: {
   params.push(Math.min(Math.max(filters.limit ?? 2000, 1), 20000));
 
   const res = await query<DashboardRow>(
-    `SELECT p.handle, p.name, p.color, p.category, v.size, v.sku, v.price, v.currency,
+    `SELECT p.handle, p.name, p.color, p.category, p.image_url, v.size, v.sku, v.price, v.currency,
             v.status, p.url, latest.event AS latest_event,
             latest.detected_at AS latest_event_at,
             v.first_seen_at, v.last_checked_at

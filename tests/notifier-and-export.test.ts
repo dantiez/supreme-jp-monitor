@@ -15,7 +15,13 @@ import {
   buildExportFilename
 } from '../src/server/export-writer.js';
 import { DashboardRow } from '../src/db/monitor-repository.js';
-import { escapeHtml, formatMoney, renderDashboard } from '../src/server/dashboard-page.js';
+import {
+  escapeHtml,
+  formatMoney,
+  renderDashboard,
+  thumbnailUrl,
+  buildLineText
+} from '../src/server/dashboard-page.js';
 import { formatWhen, timeZoneLabel } from '../src/format-time.js';
 
 function change(over: Partial<DetectedChange> = {}): DetectedChange {
@@ -97,6 +103,7 @@ function row(over: Partial<DashboardRow> = {}): DashboardRow {
     name: 'Box Logo Tee',
     color: 'Black',
     category: 'tops',
+    image_url: 'https://jp.supreme.com/cdn/shop/files/tee.jpg?v=1',
     size: 'Large',
     sku: 'FW26TS1-BLK-L',
     price: 15400, currency: 'JPY',
@@ -196,9 +203,52 @@ describe('dashboard rendering', () => {
     expect(formatMoney(15400, 'JPY')).toBe('¥15,400');
   });
 
-  it('says the table is empty rather than rendering a blank page', () => {
-    // A blank dashboard reads as "nothing is in stock".
-    expect(renderDashboard([], [], {})).toContain('Nothing tracked yet');
+  it('splits the rows into a green column and a red one', () => {
+    const html = renderDashboard(
+      [row({ status: 'AVAILABLE' }), row({ size: 'Small', status: 'SOLD_OUT' })],
+      [],
+      {}
+    );
+    expect(html).toContain('Còn hàng');
+    expect(html).toContain('Hết hàng');
+  });
+
+  it('puts the colour in every line, so two sizes cannot look identical', () => {
+    // Supreme ships one product per colourway. "Box Logo — M" alone can name
+    // several different garments, and the person copying it cannot tell which.
+    expect(buildLineText(row())).toBe('Box Logo Tee — Black — Large');
+  });
+
+  it('omits a missing colour rather than printing an empty separator', () => {
+    expect(buildLineText(row({ color: null }))).toBe('Box Logo Tee — Large');
+  });
+
+  it('copies exactly the text the line displays', () => {
+    const html = renderDashboard([row()], [], {});
+    // The button carries the same string the anchor renders; if these drift,
+    // the reader pastes something other than what they read.
+    expect(html).toContain('data-copy="Box Logo Tee — Black — Large"');
+    expect(html).toContain('>Box Logo Tee — Black — Large</a>');
+  });
+
+  it('requests a thumbnail, never the full-size image', () => {
+    // 834 KB original vs 11 KB at width=200; across ~300 products that is the
+    // difference between 248 MB and a page that loads.
+    expect(thumbnailUrl('https://cdn/x.jpg?v=1')).toBe('https://cdn/x.jpg?v=1&width=200');
+    expect(thumbnailUrl('https://cdn/x.jpg')).toBe('https://cdn/x.jpg?width=200');
+    expect(thumbnailUrl(null)).toBeNull();
+  });
+
+  it('never files an UNKNOWN row under sold out', () => {
+    // A failed check is not a sell-out. Colouring it red would tell the reader
+    // an item is gone when nobody established that.
+    const html = renderDashboard([row({ status: 'UNKNOWN' })], [], {});
+    expect(html).toContain('chưa kiểm tra được');
+  });
+
+  it('marks a restocked line so the awaited event stands out', () => {
+    const html = renderDashboard([row({ latest_event: 'RESTOCK' })], [], {});
+    expect(html).toContain('RESTOCK</span>');
   });
 
   it('carries active filters into the export links', () => {

@@ -111,13 +111,25 @@ src/
   notify/discord-notifier.ts        alert building (pure) + webhook post
   server/
     server.ts                       read-only dashboard + export routes
-    dashboard-page.ts               server-rendered HTML (pure)
+    dashboard-page.ts               two-column HTML: green in stock, red not (pure)
     export-writer.ts                CSV / XLSX
   cli/run-scan.ts                   what Actions invokes
 tests/fixtures/                     real captured HTML, not hand-written
 ```
 
 Parser tests run against HTML captured from the live site. A fixture I wrote myself would only prove the parser matches my assumptions.
+
+---
+
+## The dashboard
+
+Two columns: **green for what can be bought, red for what cannot**, one line per product-colour-size, with a thumbnail and a copy button.
+
+**Colour is part of every line** — `Box Logo Hooded Sweatshirt — Black — M`. Supreme ships one product per colourway, so without it two identical-looking lines are two different garments and the person copying one cannot tell which.
+
+**Thumbnails, never the original image.** The full file is 834 KB and the 200px version is 11 KB; across ~300 products that is 248 MB versus 3.3 MB, which is the difference between a page that loads and one that does not.
+
+**`UNKNOWN` is never filed under sold out.** A failed check gets its own note. Colouring it red would tell the reader an item is gone when nobody established that.
 
 ---
 

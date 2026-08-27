@@ -1,8 +1,18 @@
-// Server-rendered dashboard.
+// Server-rendered dashboard: two columns, green for what can be bought and red
+// for what cannot.
 //
 // Kept as a pure function of (rows, categories, filters) so the markup can be
 // tested without a database or a browser -- above all the escaping, since
 // product names come from a third party and land directly in HTML.
+//
+// WHY A FLAT LIST RATHER THAN CARDS PER PRODUCT: the reader wants to copy a
+// line and paste it somewhere. Text lines select cleanly; a card grid does not.
+// One line per (product, colour, size) is also the shape the data already has.
+//
+// WHY COLOUR IS IN EVERY LINE: Supreme ships one product per colourway, so
+// "Box Logo Hooded Sweatshirt — M" can name several different garments. Without
+// the colour, two identical-looking lines are two different things to buy, and
+// the person copying one has no way to tell which.
 
 import { DashboardRow } from '../db/monitor-repository.js';
 import { formatWhen, timeZoneLabel } from '../format-time.js';
@@ -26,8 +36,7 @@ export function escapeHtml(value: unknown): string {
  *
  * The currency comes from the row, never from an assumption: jp.supreme.com
  * sometimes serves the US store, and printing $148 as "¥148" is the same
- * defect as a column headed JPY holding dollars. A price whose currency is
- * unknown is shown bare, so nobody reads a symbol that was never established.
+ * defect as a column headed JPY holding dollars.
  */
 export function formatMoney(value: number | null, currency: string | null): string {
   if (value === null || value === undefined) return '—';
@@ -37,12 +46,31 @@ export function formatMoney(value: number | null, currency: string | null): stri
   return currency ? `${amount} ${currency}` : amount;
 }
 
+/**
+ * A small thumbnail rather than the original image.
+ *
+ * Shopify's CDN resizes on request, and the difference is not cosmetic: the
+ * full-size file is 834 KB, the 200px one is 11 KB. Across ~300 products that
+ * is 248 MB versus 3.3 MB -- the page simply does not load without this.
+ *
+ * The URL already carries a `?v=` cache-buster, so the parameter is appended.
+ */
+export function thumbnailUrl(imageUrl: string | null, width = 200): string | null {
+  if (!imageUrl) return null;
+  const separator = imageUrl.includes('?') ? '&' : '?';
+  return `${imageUrl}${separator}width=${width}`;
+}
 
-const STATUS_CLASS: Record<string, string> = {
-  AVAILABLE: 'ok',
-  SOLD_OUT: 'out',
-  UNKNOWN: 'unknown'
-};
+/**
+ * The line the reader copies: product, colour, size.
+ *
+ * Built here rather than in the template so the copy button and the visible
+ * text can never drift apart -- copying something different from what is on
+ * screen is worse than having no button.
+ */
+export function buildLineText(row: DashboardRow): string {
+  return [row.name, row.color, row.size].filter(Boolean).join(' — ');
+}
 
 const STATUSES = ['AVAILABLE', 'SOLD_OUT', 'UNKNOWN'];
 const EVENTS = ['RESTOCK', 'NEW_PRODUCT', 'NEW_VARIANT', 'PRICE_CHANGED', 'SOLD_OUT'];
@@ -58,6 +86,34 @@ export interface DashboardFilters {
   category?: string;
 }
 
+function renderLine(row: DashboardRow): string {
+  const text = buildLineText(row);
+  const thumb = thumbnailUrl(row.image_url);
+  // A restock is the one event the reader is waiting for, so it gets a marker.
+  // Everything else stays plain -- a badge on every line marks nothing.
+  const restocked = row.latest_event === 'RESTOCK' ? '<span class="badge" title="Vừa có hàng lại">RESTOCK</span>' : '';
+
+  return `<li>
+  ${thumb ? `<img class="thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" decoding="async">` : '<span class="thumb blank"></span>'}
+  <span class="body">
+    <a class="line" href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>${restocked}
+    <span class="meta">${escapeHtml(formatMoney(row.price, row.currency))}</span>
+  </span>
+  <button class="copy" type="button" data-copy="${escapeHtml(text)}" title="Copy tên">Copy</button>
+</li>`;
+}
+
+function renderColumn(title: string, tone: 'ok' | 'out', rows: DashboardRow[]): string {
+  return `<section class="col ${tone}">
+  <h2><span class="dot"></span>${escapeHtml(title)} <span class="count">${rows.length}</span></h2>
+  ${
+    rows.length === 0
+      ? '<p class="empty">Không có mục nào.</p>'
+      : `<ul>${rows.map(renderLine).join('\n')}</ul>`
+  }
+</section>`;
+}
+
 export function renderDashboard(
   rows: DashboardRow[],
   categories: string[],
@@ -69,97 +125,117 @@ export function renderDashboard(
   if (filters.category) query.set('category', filters.category);
   const exportQuery = query.toString();
 
-  const available = rows.filter((r) => r.status === 'AVAILABLE').length;
+  const available = rows.filter((r) => r.status === 'AVAILABLE');
+  const soldOut = rows.filter((r) => r.status === 'SOLD_OUT');
+  // UNKNOWN means the check failed, which is NOT sold out. Putting it in the
+  // red column would tell the reader an item is gone when nobody established
+  // that, so it gets its own line rather than being folded into either side.
+  const unknown = rows.filter((r) => r.status === 'UNKNOWN');
 
-  const body = rows
-    .map(
-      (row) => `<tr>
-  <td><a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.name)}</a></td>
-  <td>${escapeHtml(row.color)}</td>
-  <td>${escapeHtml(row.size)}</td>
-  <td class="num">${formatMoney(row.price, row.currency)}</td>
-  <td><span class="pill ${STATUS_CLASS[row.status] ?? 'unknown'}">${escapeHtml(row.status)}</span></td>
-  <td>${escapeHtml(row.latest_event ?? '')}</td>
-  <td class="dim">${formatWhen(row.last_checked_at)}</td>
-</tr>`
-    )
-    .join('\n');
+  const lastChecked = rows.reduce<string | null>(
+    (latest, r) => (!latest || r.last_checked_at > latest ? r.last_checked_at : latest),
+    null
+  );
 
   return `<!doctype html>
-<html lang="en">
+<html lang="vi">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Supreme JP Stock Monitor</title>
+<title>Supreme JP — Còn hàng / Hết hàng</title>
 <style>
-  :root { color-scheme: dark; }
-  body { margin:0; background:#0b0f14; color:#e6edf3; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-  header { padding:20px 24px; border-bottom:1px solid #1c2733; }
-  h1 { margin:0; font-size:18px; }
-  .sub { color:#7d8894; font-size:12px; margin-top:4px; }
-  main { padding:20px 24px; }
-  form { display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:18px; }
-  label { display:block; font-size:11px; color:#7d8894; margin-bottom:4px; }
-  select, button, .btn { background:#111925; color:#e6edf3; border:1px solid #23303f; border-radius:8px; padding:8px 12px; font-size:13px; }
-  .btn { text-decoration:none; display:inline-block; }
-  .btn.primary { background:#1f6feb; border-color:#1f6feb; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th { text-align:left; color:#7d8894; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:8px 10px; border-bottom:1px solid #23303f; }
-  td { padding:8px 10px; border-bottom:1px solid #161f2b; }
-  td a { color:#e6edf3; }
-  .num { text-align:right; font-variant-numeric:tabular-nums; }
-  .dim { color:#7d8894; }
-  .pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
-  .pill.ok { background:rgba(46,204,113,.15); color:#3fdc86; }
-  .pill.out { background:rgba(149,165,166,.15); color:#9fb0bf; }
-  .pill.unknown { background:rgba(241,196,15,.15); color:#f1c40f; }
-  .empty { color:#7d8894; padding:40px 0; text-align:center; }
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#fff; color:#111; font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  header { padding:18px 22px; border-bottom:1px solid #e6e6e6; }
+  h1 { margin:0; font-size:17px; }
+  .sub { color:#777; font-size:12px; margin-top:3px; }
+  form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:14px 22px; border-bottom:1px solid #eee; }
+  select, button, .btn { font:inherit; font-size:13px; padding:7px 11px; border:1px solid #d5d5d5; border-radius:7px; background:#fff; color:#111; }
+  .btn { text-decoration:none; }
+  .btn.primary { background:#111; color:#fff; border-color:#111; }
+  main { display:grid; grid-template-columns:1fr 1fr; gap:0; }
+  @media (max-width: 860px) { main { grid-template-columns:1fr; } }
+  .col { padding:16px 22px; min-width:0; }
+  .col + .col { border-left:1px solid #eee; }
+  @media (max-width: 860px) { .col + .col { border-left:0; border-top:1px solid #eee; } }
+  h2 { font-size:13px; letter-spacing:.03em; text-transform:uppercase; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
+  .dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
+  .col.ok .dot { background:#22a447; }
+  .col.out .dot { background:#dc2626; }
+  .count { color:#888; font-weight:400; }
+  ul { list-style:none; margin:0; padding:0; }
+  li { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid #f2f2f2; }
+  .thumb { width:40px; height:40px; object-fit:cover; border-radius:5px; background:#f4f4f4; flex:0 0 40px; }
+  .thumb.blank { display:inline-block; }
+  .body { flex:1; min-width:0; }
+  .line { display:block; text-decoration:none; font-weight:500; overflow-wrap:anywhere; }
+  .col.ok .line { color:#15803d; }
+  .col.out .line { color:#b91c1c; }
+  .meta { font-size:12px; color:#888; }
+  .badge { font-size:10px; font-weight:700; color:#15803d; border:1px solid #22a447; border-radius:4px; padding:0 4px; margin-left:6px; vertical-align:1px; }
+  .copy { flex:0 0 auto; cursor:pointer; color:#666; font-size:12px; padding:4px 8px; }
+  .copy:hover { background:#f4f4f4; }
+  .copy.done { color:#15803d; border-color:#22a447; }
+  .empty { color:#999; font-size:13px; }
+  .note { padding:12px 22px; color:#9a6b00; background:#fff8e6; border-top:1px solid #f0e0b0; font-size:13px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Supreme JP Stock Monitor</h1>
-  <div class="sub">${rows.length} tracked size(s) &middot; ${available} available &middot; tracked as Product + Size, colour is a product attribute &middot; times in ${escapeHtml(timeZoneLabel())}</div>
+  <h1>Supreme JP — Còn hàng / Hết hàng</h1>
+  <div class="sub">${rows.length} mục &middot; cập nhật ${escapeHtml(formatWhen(lastChecked))} (${escapeHtml(timeZoneLabel())}) &middot; mỗi màu là một sản phẩm riêng</div>
 </header>
-<main>
-  <form method="get">
-    <div>
-      <label for="status">Status</label>
-      <select id="status" name="status">
-        <option value="">All</option>
-        ${STATUSES.map((s) => option(s, filters.status)).join('')}
-      </select>
-    </div>
-    <div>
-      <label for="event">Latest event</label>
-      <select id="event" name="event">
-        <option value="">All</option>
-        ${EVENTS.map((e) => option(e, filters.event)).join('')}
-      </select>
-    </div>
-    <div>
-      <label for="category">Category</label>
-      <select id="category" name="category">
-        <option value="">All</option>
-        ${categories.map((c) => option(c, filters.category)).join('')}
-      </select>
-    </div>
-    <button type="submit">Filter</button>
-    <a class="btn" href="/export?format=csv${exportQuery ? '&' + exportQuery : ''}">Download CSV</a>
-    <a class="btn primary" href="/export?format=xlsx${exportQuery ? '&' + exportQuery : ''}">Download Excel</a>
-  </form>
 
-  ${
-    rows.length === 0
-      ? '<div class="empty">Nothing tracked yet. Run <code>npm run scan</code> to populate.</div>'
-      : `<table>
-  <thead><tr><th>Product</th><th>Color</th><th>Size</th><th class="num">Price</th><th>Status</th><th>Latest event</th><th>Last checked (${escapeHtml(timeZoneLabel())})</th></tr></thead>
-  <tbody>
-${body}
-  </tbody>
-</table>`
-  }
+<form method="get">
+  <select name="category" aria-label="Danh mục">
+    <option value="">Tất cả danh mục</option>
+    ${categories.map((c) => option(c, filters.category)).join('')}
+  </select>
+  <select name="event" aria-label="Sự kiện">
+    <option value="">Mọi sự kiện</option>
+    ${EVENTS.map((e) => option(e, filters.event)).join('')}
+  </select>
+  <select name="status" aria-label="Trạng thái">
+    <option value="">Cả hai cột</option>
+    ${STATUSES.map((s) => option(s, filters.status)).join('')}
+  </select>
+  <button type="submit">Lọc</button>
+  <a class="btn" href="/export?format=csv${exportQuery ? '&' + exportQuery : ''}">Tải CSV</a>
+  <a class="btn primary" href="/export?format=xlsx${exportQuery ? '&' + exportQuery : ''}">Tải Excel</a>
+</form>
+
+<main>
+  ${renderColumn('Còn hàng', 'ok', available)}
+  ${renderColumn('Hết hàng', 'out', soldOut)}
 </main>
+
+${
+  unknown.length > 0
+    ? `<p class="note">${unknown.length} mục chưa kiểm tra được ở lần quét gần nhất. Chúng <strong>không</strong> được xếp vào "hết hàng" — chưa ai xác nhận điều đó.</p>`
+    : ''
+}
+
+<script>
+  // Copies the same string the line displays. The text lives in a data
+  // attribute built server-side, so what is copied and what is read can never
+  // drift apart.
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.copy');
+    if (!btn) return;
+    var text = btn.getAttribute('data-copy') || '';
+    navigator.clipboard.writeText(text).then(function () {
+      var previous = btn.textContent;
+      btn.textContent = 'Đã copy';
+      btn.classList.add('done');
+      setTimeout(function () { btn.textContent = previous; btn.classList.remove('done'); }, 1200);
+    }).catch(function () {
+      // Clipboard needs a secure context. Say so rather than failing silently.
+      btn.textContent = 'Không copy được';
+      setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
+    });
+  });
+</script>
 </body>
 </html>`;
 }
