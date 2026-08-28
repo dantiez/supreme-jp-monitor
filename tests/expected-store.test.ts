@@ -24,14 +24,22 @@ describe('assertExpectedStore', () => {
     expect(() => assertExpectedStore(null)).toThrow(WrongStoreError);
   });
 
-  it('names the store it got, so the log says what to fix', () => {
+  it('tells the reader what happened, that nothing broke, and what to do', () => {
+    // Whoever pressed the button sees this, and they did not necessarily
+    // deploy the thing. Three lines of English about product handles told a
+    // non-technical reader only that something had broken.
     try {
       assertExpectedStore('SGD');
       expect.unreachable();
     } catch (e) {
+      const message = (e as Error).message;
       expect((e as WrongStoreError).found).toBe('SGD');
-      expect((e as Error).message).toContain('SGD');
-      expect((e as Error).message).toContain('JPY');
+      expect(message).toContain('SGD');
+      expect(message).toContain('JPY');
+      // Nothing was damaged -- the first thing the reader needs to know.
+      expect(message).toContain('nguyên vẹn');
+      // And the way out.
+      expect(message).toContain('cửa hàng Nhật');
     }
   });
 });
