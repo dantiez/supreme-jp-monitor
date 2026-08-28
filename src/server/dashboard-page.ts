@@ -335,6 +335,14 @@ ${
 
     function showResult(l) {
       if (!banner) return;
+      // Handed to the worker: the request is on its way, not broken. Shown as
+      // news rather than as a failure, because for the reader nothing is wrong.
+      if (l.queued) {
+        banner.className = 'show quiet';
+        banner.textContent =
+          'Máy chủ này không vào được cửa hàng Nhật, đã chuyển yêu cầu sang máy quét. Kết quả sẽ hiện trong vài phút.';
+        return;
+      }
       if (!l.ok) {
         banner.className = 'show changed';
         banner.innerHTML = '<span class="lost">Lần quét LỖI:</span> ' + (l.error || 'không rõ');
