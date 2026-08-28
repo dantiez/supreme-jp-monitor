@@ -106,55 +106,17 @@ On loopback there is no password and no prompt -- the reader already owns the ma
 
 `/healthz` stays open: the platform probes it before routing traffic, and it answers liveness and nothing else.
 
-### Deploying: the button is here, the scanning is there
+### Deploying
 
-**Where a scan runs is a correctness requirement, not a latency preference.** supreme.com serves a storefront picked from the caller's IP, and each storefront renames every product, so a scan from the wrong country records a stranger's catalogue over this one. Render has no Tokyo region -- no Render instance can ever scan.
+`render.yaml` describes a free web service: `npm ci && npm start`, health check on `/healthz`, `HOST=0.0.0.0`, and three secrets entered in the dashboard rather than committed.
 
-But the reader who wants fresh data is sitting in front of the hosted dashboard, not in front of the machine that can scan. So the button records the **ask**, and the machine that can scan serves it:
+**A scan started from Render is refused, not recorded.** supreme.com serves a storefront picked from the caller's IP, each storefront renames every product, and Render has no Tokyo region. Pressing Quét ngay there reports that it cannot reach the Japanese store and leaves the catalogue untouched. **Scanning has to be run from a machine that reaches the JP store** -- `npm run scan` there.
 
-```
-reader presses Quét ngay  ->  hosted instance writes a row  ->  worker on the Mac claims it and scans
-```
+That is a deliberate trade. A queue-and-worker arrangement that let the hosted button be served by a machine elsewhere was built and then removed at the customer's request: it worked, and it cost a background agent, an install step, and a second moving part to explain.
 
-The database is already shared by both sides, which is why this needs no proxy, no open port and no second service.
+**`tsx` is a runtime dependency, not a dev one.** The server runs TypeScript directly, and Render installs with `NODE_ENV=production`, which skips `devDependencies` -- `tsx` sitting there meant the deploy would install cleanly and then fail on start with `tsx: not found`. Verified with `npm ci --omit=dev`.
 
-| | Runs where | Does what |
-|---|---|---|
-| Dashboard | Render, free plan | Serves the page; queues scan requests |
-| Worker | The owner's Mac | Claims requests and scans; also refreshes stale data |
-
-`ALLOW_SCANNING=false` on the hosted instance turns `POST /api/scan` from "scan" into "record the ask", answered **202 Accepted** -- accepted, not done, which is what actually happened.
-
-**Forgetting that variable costs seconds, not the feature.** A scan that fails with `WrongStoreError` queues the request instead of reporting a failure: the instance has just proved it cannot reach the shop, which is a fact about where it runs, not a fault. `ALLOW_SCANNING=false` only skips the wasted attempt. This matters because a Render service created by hand rather than from `render.yaml` has no such variable, and that mistake used to hand the reader an error.
-
-Other failures are not treated this way. A parser break or a dead database is not something another machine fixes, and neither is a queue that cannot be written to -- that one is reported honestly.
-
-**Repeated clicks collapse onto one request.** Three impatient presses mean one scan.
-
-**`Khởi tạo danh sách` stays on the machine that scans.** It discards the baseline, taking the red items still waiting to be acted on with it; that is not something to hand to a second reader through a queue whose consequences they cannot see.
-
-**Status is read from the database when this instance does not scan.** The in-process state is always empty there, so reporting it alone would say "nothing has ever run" while a scan was in progress on another machine.
-
-**A request nobody picks up says so.** After five minutes the status line reads "máy quét có thể đang tắt" instead of spinning forever -- the Mac is asleep, and a spinner that never resolves is worse than the truth.
-
-**Installing the worker (macOS):**
-
-```bash
-./scripts/install-agent.sh
-tail -f ~/Library/Logs/supreme-jp-monitor/scan.log
-```
-
-**The repository must not live in `~/Downloads`, `~/Desktop` or `~/Documents`.** macOS protects those (TCC), and a launchd agent may not execute anything inside them without Full Disk Access. The way it fails is the worst kind: the agent installs, `launchctl list` shows it, and it simply never runs -- exit 126 and "Operation not permitted" in a log nobody thinks to open. The installer checks and refuses with instructions rather than letting that happen.
-
-**The plist is generated, not committed.** launchd expands neither `~` nor `$HOME` in `ProgramArguments`, so a checked-in plist hardcodes one machine's path and then keeps pointing at wherever the repository used to be. `scripts/scheduled-scan.sh` derives its own location for the same reason.
-
-**The installer proves the agent works before it claims to.** `RunAtLoad` means the first check has already happened by the time it reports, so it reads back the exit status instead of assuming.
-
-Every minute. That sounds like a lot for a job that scans every two hours, but the check exits in well under a second with nothing to do, and it is what makes the button on the other machine feel like a button. Absolute paths throughout: launchd gives a job almost no environment, and a bare `npm` works when tested by hand and silently fails at 3am.
-
-**One shot, not a daemon.** The worker checks once and exits. A long-lived loop would need its own supervision, restart story, and answer for a laptop that sleeps mid-wait; a process that exits has none of those, and the cost is up to a minute of latency on a job that takes two.
-
-**What this still costs:** nothing is watched while that Mac is asleep, and a request made then waits until it wakes.
+**The free plan stops the instance after ~15 minutes of no traffic**, so the first page load after a quiet spell waits ~30-60s for a cold start. Nothing is lost; state lives in Neon.
 
 ## Layout
 

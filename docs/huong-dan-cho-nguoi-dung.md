@@ -10,11 +10,11 @@ Một trang web riêng, cho bạn xem **toàn bộ hàng trên jp.supreme.com** 
 
 Dùng để canh hàng bạn đã đăng bán lại: món nào vừa hết thì gỡ tin, món nào có lại thì đăng tiếp.
 
-> ### Bấm **Quét ngay** bất cứ lúc nào
+> ### ⚠️ Nó chỉ chạy khi có người bấm
 >
-> Dữ liệu cũng tự làm mới hai tiếng một lần, nên mở ra là đã có sẵn.
+> Không bấm thì không có gì được kiểm tra. Không có lịch tự động nào cả.
 >
-> Nhưng nó **không canh liên tục**: món về hàng lúc 3 giờ rồi hết lúc 4 giờ, kẹt giữa hai lần quét, thì nó không biết. Nên **thấy tin là xử lý ngay**.
+> Món về hàng lúc 3 giờ rồi hết lúc 4 giờ, giữa hai lần bấm, thì nó không biết. Nên **thấy tin là xử lý ngay**.
 
 ---
 
@@ -32,23 +32,19 @@ Nếu bạn để yên link một lúc lâu rồi mới mở, **trang sẽ chờ
 
 ## Nút **Quét ngay**
 
-Bấm là xong. Nút sẽ báo *"Đã gửi yêu cầu, đang chờ máy quét…"*, rồi khoảng **2–3 phút** sau dữ liệu được làm mới.
+Bấm là nó đi xem lại toàn bộ hàng trên trang Supreme. Nút đổi thành **Đang quét…** kèm vòng tròn xoay, mất khoảng **5 giây**.
 
-> **Vì sao phải chờ?** Trang Supreme trả về **cửa hàng khác nhau tuỳ nơi gọi**. Máy chủ chạy trang web này ở Singapore nên nó nhận cửa hàng Singapore, không phải Nhật — quét từ đó sẽ ghi nhầm dữ liệu. Nên khi bạn bấm, yêu cầu được chuyển sang một máy khác vào đúng cửa hàng Nhật, máy đó quét rồi trả kết quả về đây.
+Xong sẽ có dòng báo kết quả: *"không có gì thay đổi"*, hoặc *"Mất hàng: 4 vừa hết hàng"*, hoặc *"Thêm hàng: 2 có hàng lại"*.
 
-Bấm nhiều lần cũng chỉ chạy **một** lần quét, không sao cả.
+> Nếu thấy báo **"Máy chủ này đang vào cửa hàng SGD, không phải cửa hàng Nhật"** thì đừng lo — dữ liệu vẫn nguyên vẹn, chỉ là máy chủ này không quét được. Báo người quản lý để họ quét từ máy khác.
 
-Đôi khi sẽ thấy dòng *"Máy chủ này không vào được cửa hàng Nhật, đã chuyển yêu cầu sang máy quét"* — **bình thường**, cứ chờ vài phút.
+## Nút **Khởi tạo danh sách**
 
-**Nếu thấy báo "Đã chờ 5 phút — máy quét có thể đang tắt"**: máy quét chưa bật. Báo người quản lý.
+Chỉ dùng **lần đầu**, hoặc khi muốn chốt lại danh sách từ đầu. Lần đầu chưa có danh sách thì nút này được tô viền xanh dương.
 
-Ngoài ra dữ liệu cũng **tự làm mới hai tiếng một lần**, không cần ai bấm.
+> ⚠️ **Đừng bấm tuỳ tiện.** Nó chốt lại từ đầu, nên **các món đang ở cột đỏ sẽ biến mất mà bạn chưa kịp gỡ tin**. Trang sẽ hỏi xác nhận trước.
 
-
-## Ba cột
-
-| 🟢 **Còn hàng** | 🔴 **Hết hàng** | 🔵 **Sản phẩm mới** |
-|---|---|---|
+---|---|---|
 | Có trong danh sách, vẫn còn bán | Có trong danh sách, đã hết | Chưa có trong danh sách, đang bán |
 | Không phải làm gì | **Đi gỡ tin đang bán** | Có thể đăng bán thêm |
 

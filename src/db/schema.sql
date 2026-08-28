@@ -151,29 +151,3 @@ END $$;
 -- words, and one press fixes it.
 ALTER TABLE supreme_monitor.variants ADD COLUMN IF NOT EXISTS previous_status text;
 
--- Requests to scan, made from an instance that cannot scan itself.
---
--- WHY A QUEUE AND NOT A BUTTON THAT SCANS. supreme.com serves a storefront
--- chosen from the caller's IP, so a scan is only meaningful from a machine that
--- reaches the Japanese store. The hosted dashboard never will. But the reader
--- who wants fresh data is sitting in front of the hosted dashboard, not the
--- machine that can scan -- so the button records the ASK here, and the machine
--- that can scan picks it up.
---
--- The database is already shared by both sides, which is why this needs no
--- proxy, no open port and no second service.
-CREATE TABLE IF NOT EXISTS supreme_monitor.scan_requests (
-  id           bigserial   PRIMARY KEY,
-  requested_at timestamptz NOT NULL DEFAULT now(),
-  -- Set when a worker takes the job. NULL means still waiting. Claiming is a
-  -- conditional UPDATE, so two workers cannot take the same request.
-  claimed_at   timestamptz,
-  -- Set when the scan that served this request ends, successfully or not.
-  finished_at  timestamptz,
-  error        text
-);
-
--- The worker's only query: the oldest unclaimed request.
-CREATE INDEX IF NOT EXISTS scan_requests_pending_idx
-  ON supreme_monitor.scan_requests (requested_at)
-  WHERE claimed_at IS NULL;

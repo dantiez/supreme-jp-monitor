@@ -24,11 +24,11 @@ services:
     # which means a deploy here can SERVE the dashboard but its scan button will
     # fail. Scanning has to run somewhere that reaches the JP store.
     # Region is not a latency choice here. supreme.com serves a storefront
-    # picked from the caller's IP and each one renames every product, so a scan
-    # from Singapore records the SGD catalogue and withdraws all 268 Japanese
-    # products. Render has no Tokyo region, so NO Render instance can scan --
-    # hence ALLOW_SCANNING=false. This box serves the dashboard; the scanning
-    # runs on a machine that reaches the Japanese store.
+    # picked from the caller's IP and each one renames every product, and
+    # Render has no Tokyo region -- so a scan started from this box is REFUSED
+    # by src/core/expected-store.ts rather than recorded. The dashboard serves
+    # fine; the scan button here will report that it cannot reach the Japanese
+    # store, and scanning has to be run from a machine that can.
     region: singapore
     buildCommand: npm ci
     startCommand: npm start
@@ -54,8 +54,3 @@ services:
         sync: false
       - key: DISPLAY_TIMEZONE
         value: Asia/Tokyo
-      # View only: hides both scan controls and makes POST /api/scan answer 403,
-      # so nobody is handed a button that could only fail from here. The scan
-      # would refuse this storefront anyway; this is about not offering it.
-      - key: ALLOW_SCANNING
-        value: "false"

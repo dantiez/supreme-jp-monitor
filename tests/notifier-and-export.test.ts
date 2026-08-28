@@ -416,38 +416,3 @@ describe('the toolbar holds three controls and nothing else', () => {
     expect(html).not.toContain('Tải Excel');
   });
 });
-describe('an instance that cannot reach the Japanese store', () => {
-  const tracked = row({ previous_status: 'AVAILABLE', status: 'AVAILABLE' });
-  const hosted = renderDashboard([tracked], {}, { scanningEnabled: false });
-
-  it('still offers Quét ngay — it queues the ask instead of scanning', () => {
-    // The reader who wants fresh data is sitting here, not at the machine that
-    // can scan. Same button, same words; how it happens is not their problem.
-    expect(hosted).toContain('id="scan-btn"');
-    expect(hosted).toContain('data-queued="1"');
-  });
-
-  it('withholds Khởi tạo danh sách', () => {
-    // Initialise DISCARDS the baseline, taking the red items still waiting to
-    // be acted on with it. Not something to hand to a second reader through a
-    // queue whose consequences they cannot see.
-    expect(hosted).not.toContain('id="init-btn"');
-  });
-
-  it('keeps the data and the way to the history', () => {
-    expect(hosted).toContain('href="/changes"');
-    expect(hosted).toContain('Box Logo Tee');
-    expect(hosted).toContain('Còn hàng');
-  });
-
-  it('scans directly where that works, and offers both controls', () => {
-    const local = renderDashboard([tracked], {}, { scanningEnabled: true });
-    expect(local).toContain('id="scan-btn"');
-    expect(local).toContain('data-queued=""');
-    expect(local).toContain('id="init-btn"');
-  });
-
-  it('defaults to scanning here, so the local run is never crippled by omission', () => {
-    expect(renderDashboard([tracked], {})).toContain('data-queued=""');
-  });
-});
