@@ -106,17 +106,32 @@ On loopback there is no password and no prompt -- the reader already owns the ma
 
 `/healthz` stays open: the platform probes it before routing traffic, and it answers liveness and nothing else.
 
-### Deploying
+### Deploying to Cloud Run, Tokyo
 
-`render.yaml` describes a free web service: `npm ci && npm start`, health check on `/healthz`, `HOST=0.0.0.0`, and three secrets entered in the dashboard rather than committed.
+**The region is the whole point.** supreme.com serves a storefront picked from the caller's IP, and each storefront renames every product, so a scan from the wrong country records a stranger's catalogue over this one. Render was tried and abandoned: it has no Tokyo region, so no Render instance can scan at all.
 
-**A scan started from Render is refused, not recorded.** supreme.com serves a storefront picked from the caller's IP, each storefront renames every product, and Render has no Tokyo region. Pressing Quét ngay there reports that it cannot reach the Japanese store and leaves the catalogue untouched. **Scanning has to be run from a machine that reaches the JP store** -- `npm run scan` there.
+```bash
+gcloud run deploy supreme-jp-monitor \
+  --source . \
+  --region asia-northeast1 \
+  --no-cpu-throttling \
+  --max-instances 1 \
+  --allow-unauthenticated \
+  --set-env-vars HOST=0.0.0.0,DISPLAY_TIMEZONE=Asia/Tokyo \
+  --set-env-vars DATABASE_URL=...,DASHBOARD_PASSWORD=...,DISCORD_WEBHOOK_URL=...
+```
 
-That is a deliberate trade. A queue-and-worker arrangement that let the hosted button be served by a machine elsewhere was built and then removed at the customer's request: it worked, and it cost a background agent, an install step, and a second moving part to explain.
+`--source .` builds with Cloud Build, so no local Docker is needed.
 
-**`tsx` is a runtime dependency, not a dev one.** The server runs TypeScript directly, and Render installs with `NODE_ENV=production`, which skips `devDependencies` -- `tsx` sitting there meant the deploy would install cleanly and then fail on start with `tsx: not found`. Verified with `npm ci --omit=dev`.
+**`--no-cpu-throttling` is not optional.** Cloud Run grants CPU only while a request is being handled, and the scan button answers 202 immediately and then works in the background. Without this flag the CPU is cut the moment the response is sent, and the scan stalls partway through -- writing some of the catalogue and none of the rest. The flag switches to instance-based billing; the service still scales to zero.
 
-**The free plan stops the instance after ~15 minutes of no traffic**, so the first page load after a quiet spell waits ~30-60s for a cold start. Nothing is lost; state lives in Neon.
+**`--max-instances 1` is not optional either.** The one-scan-at-a-time lock lives in process memory. Two instances would each hold their own, scan simultaneously, and each report the other's writes as changes -- the exact failure the lock exists to prevent.
+
+**Whether Tokyo actually reaches the Japanese store is unverified.** Google's egress IPs are Google's, and Shopify maps IP to market more finely than Supreme's six regional hosts (there is no `sg.supreme.com`, yet Singapore is served SGD). The first press of Quét ngay answers it: a scan that runs is proof, and one that refuses names the store it got and records nothing. Nothing is risked by finding out.
+
+**A synchronous scan would be simpler here**, and is the obvious follow-up. The 202-and-poll design exists because a scan used to take two minutes; it now takes five seconds, which fits inside an ordinary request. That would remove the polling, the in-process state, and the need for `--no-cpu-throttling`.
+
+**`tsx` is a runtime dependency, not a dev one.** The image installs with `--omit=dev`; with `tsx` in `devDependencies` the build succeeds and the container dies on start with `tsx: not found`. Verified with a real `npm ci --omit=dev`.
 
 ## Layout
 
