@@ -111,17 +111,29 @@ On loopback there is no password and no prompt -- the reader already owns the ma
 **The region is the whole point.** supreme.com serves a storefront picked from the caller's IP, and each storefront renames every product, so a scan from the wrong country records a stranger's catalogue over this one. Render was tried and abandoned: it has no Tokyo region, so no Render instance can scan at all.
 
 ```bash
+brew install --cask google-cloud-sdk
+gcloud auth login
+gcloud projects create supreme-jp-monitor --name="Supreme JP Monitor"
+gcloud config set project supreme-jp-monitor
+# Billing must be linked in the console first: console.cloud.google.com/billing
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+
+./scripts/make-gcloud-env.sh          # .env.local -> .gcloud-env.yaml, gitignored
+
 gcloud run deploy supreme-jp-monitor \
   --source . \
   --region asia-northeast1 \
   --no-cpu-throttling \
   --max-instances 1 \
   --allow-unauthenticated \
-  --set-env-vars HOST=0.0.0.0,DISPLAY_TIMEZONE=Asia/Tokyo \
-  --set-env-vars DATABASE_URL=...,DASHBOARD_PASSWORD=...,DISCORD_WEBHOOK_URL=...
+  --env-vars-file .gcloud-env.yaml
 ```
 
 `--source .` builds with Cloud Build, so no local Docker is needed.
+
+**`--env-vars-file`, not `--set-env-vars`.** Passing secrets as command arguments writes the Neon connection string and the dashboard password into shell history, and into the process list while the command runs. The file is gitignored and chmod 600. It is still not Secret Manager -- the values remain readable in the service configuration to anyone with console access -- which is a reasonable trade for one person's project and not for a team's.
+
+**`--allow-unauthenticated` is correct here, and is not "no auth".** It turns off Google's IAM check so the friend can open the URL without a Google account; the dashboard's own password still guards every route. Without it, nobody but the project owner could load the page at all.
 
 **`--no-cpu-throttling` is not optional.** Cloud Run grants CPU only while a request is being handled, and the scan button answers 202 immediately and then works in the background. Without this flag the CPU is cut the moment the response is sent, and the scan stalls partway through -- writing some of the catalogue and none of the rest. The flag switches to instance-based billing; the service still scales to zero.
 
