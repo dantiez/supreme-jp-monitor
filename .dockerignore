@@ -1,0 +1,12 @@
+# Reinstalled inside the image for the right platform; the host's copy is macOS
+# binaries and would overwrite that.
+node_modules
+.git
+.github
+# Secrets belong in Secret Manager or --set-env-vars, never in an image layer.
+.env
+.env.local
+tests
+docs
+plans
+*.md

@@ -106,17 +106,44 @@ On loopback there is no password and no prompt -- the reader already owns the ma
 
 `/healthz` stays open: the platform probes it before routing traffic, and it answers liveness and nothing else.
 
-### Deploying
+### Deploying to Cloud Run, Tokyo
 
-`render.yaml` describes a free web service: `npm ci && npm start`, health check on `/healthz`, `HOST=0.0.0.0`, and three secrets entered in the dashboard rather than committed.
+**The region is the whole point.** supreme.com serves a storefront picked from the caller's IP, and each storefront renames every product, so a scan from the wrong country records a stranger's catalogue over this one. Render was tried and abandoned: it has no Tokyo region, so no Render instance can scan at all.
 
-**A scan started from Render is refused, not recorded.** supreme.com serves a storefront picked from the caller's IP, each storefront renames every product, and Render has no Tokyo region. Pressing Quét ngay there reports that it cannot reach the Japanese store and leaves the catalogue untouched. **Scanning has to be run from a machine that reaches the JP store** -- `npm run scan` there.
+```bash
+brew install --cask google-cloud-sdk
+gcloud auth login
+gcloud projects create supreme-jp-monitor --name="Supreme JP Monitor"
+gcloud config set project supreme-jp-monitor
+# Billing must be linked in the console first: console.cloud.google.com/billing
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
 
-That is a deliberate trade. A queue-and-worker arrangement that let the hosted button be served by a machine elsewhere was built and then removed at the customer's request: it worked, and it cost a background agent, an install step, and a second moving part to explain.
+./scripts/make-gcloud-env.sh          # .env.local -> .gcloud-env.yaml, gitignored
 
-**`tsx` is a runtime dependency, not a dev one.** The server runs TypeScript directly, and Render installs with `NODE_ENV=production`, which skips `devDependencies` -- `tsx` sitting there meant the deploy would install cleanly and then fail on start with `tsx: not found`. Verified with `npm ci --omit=dev`.
+gcloud run deploy supreme-jp-monitor \
+  --source . \
+  --region asia-northeast1 \
+  --no-cpu-throttling \
+  --max-instances 1 \
+  --allow-unauthenticated \
+  --env-vars-file .gcloud-env.yaml
+```
 
-**The free plan stops the instance after ~15 minutes of no traffic**, so the first page load after a quiet spell waits ~30-60s for a cold start. Nothing is lost; state lives in Neon.
+`--source .` builds with Cloud Build, so no local Docker is needed.
+
+**`--env-vars-file`, not `--set-env-vars`.** Passing secrets as command arguments writes the Neon connection string and the dashboard password into shell history, and into the process list while the command runs. The file is gitignored and chmod 600. It is still not Secret Manager -- the values remain readable in the service configuration to anyone with console access -- which is a reasonable trade for one person's project and not for a team's.
+
+**`--allow-unauthenticated` is correct here, and is not "no auth".** It turns off Google's IAM check so the friend can open the URL without a Google account; the dashboard's own password still guards every route. Without it, nobody but the project owner could load the page at all.
+
+**`--no-cpu-throttling` is not optional.** Cloud Run grants CPU only while a request is being handled, and the scan button answers 202 immediately and then works in the background. Without this flag the CPU is cut the moment the response is sent, and the scan stalls partway through -- writing some of the catalogue and none of the rest. The flag switches to instance-based billing; the service still scales to zero.
+
+**`--max-instances 1` is not optional either.** The one-scan-at-a-time lock lives in process memory. Two instances would each hold their own, scan simultaneously, and each report the other's writes as changes -- the exact failure the lock exists to prevent.
+
+**Whether Tokyo actually reaches the Japanese store is unverified.** Google's egress IPs are Google's, and Shopify maps IP to market more finely than Supreme's six regional hosts (there is no `sg.supreme.com`, yet Singapore is served SGD). The first press of Quét ngay answers it: a scan that runs is proof, and one that refuses names the store it got and records nothing. Nothing is risked by finding out.
+
+**A synchronous scan would be simpler here**, and is the obvious follow-up. The 202-and-poll design exists because a scan used to take two minutes; it now takes five seconds, which fits inside an ordinary request. That would remove the polling, the in-process state, and the need for `--no-cpu-throttling`.
+
+**`tsx` is a runtime dependency, not a dev one.** The image installs with `--omit=dev`; with `tsx` in `devDependencies` the build succeeds and the container dies on start with `tsx: not found`. Verified with a real `npm ci --omit=dev`.
 
 ## Layout
 
