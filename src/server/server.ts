@@ -96,13 +96,12 @@ app.get('/api/scan/status', (_req, res) => {
 app.get('/', async (req, res) => {
   try {
     const filters = readFilters(req.query as Record<string, unknown>);
-    const [rows, categories] = await Promise.all([
-      repo.loadDashboardRows(filters),
-      repo.loadCategories()
-    ]);
+    // Categories were only ever read to fill a filter dropdown the toolbar no
+    // longer has; loading them now would be a query nobody looks at.
+    const rows = await repo.loadDashboardRows(filters);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(renderDashboard(rows, categories, filters));
+    res.send(renderDashboard(rows, filters));
   } catch (e) {
     // Say what broke. A blank dashboard reads as "nothing is in stock".
     res.status(500).send(

@@ -126,28 +126,7 @@ Orange | Size Large | ¥85,800                ← màu | size | giá
 
 ---
 
-## Tải file
 
-- **Tải CSV** — mở bằng Excel hoặc Google Sheets
-- **Tải Excel** — file `.xlsx`
-
-File có đủ mọi thứ trên màn hình, kèm giá và đơn vị tiền.
-
-> Cột **Currency** ghi rõ tiền gì (JPY hay USD). Trang Supreme thỉnh thoảng trả về giá đô, nên đừng nhìn con số không mà đoán là yên.
->
-> Ô giá **để trống** nghĩa là không đọc được giá — **không phải** giá bằng 0.
-
----
-
-## Ô lọc phía trên
-
-- **Tất cả danh mục** → chỉ xem áo, giày, phụ kiện…
-- **Mọi sự kiện** → chỉ xem món vừa về hàng, vừa hết hàng…
-- **Cả hai cột** → chỉ xem cột còn hàng, hoặc chỉ cột hết hàng
-
-Chọn xong bấm **Lọc**.
-
----
 
 ## Mấy điều hay hỏi
 
