@@ -21,6 +21,12 @@ import { formatWhen, timeZoneLabel } from '../format-time.js';
  * Escape before interpolation. Product names and colours are third-party text;
  * one unescaped `<` is a script tag on a page the customer trusts.
  */
+import {
+  groupByWatchList,
+  nothingChanged as noChanges,
+  countUnknown
+} from '../core/watch-list-grouping.js';
+
 export function escapeHtml(value: unknown): string {
   if (value === null || value === undefined) return '';
   return String(value)
@@ -86,17 +92,6 @@ export interface DashboardFilters {
   category?: string;
 }
 
-export interface DashboardMeta {
-  /**
-   * Changes found by the most recent finished scan.
-   *
-   * Null when no scan has completed. Zero and null are kept apart on purpose:
-   * "the last check found nothing" and "nothing has been checked" look the
-   * same on screen otherwise, and only one of them is reassuring.
-   */
-  lastScanChanges: number | null;
-}
-
 function renderLine(row: DashboardRow): string {
   const text = buildLineText(row);
   const thumb = thumbnailUrl(row.image_url);
@@ -127,7 +122,7 @@ interface ColumnOptions {
 
 function renderColumn(
   title: string,
-  tone: 'ok' | 'out',
+  tone: 'ok' | 'out' | 'new',
   rows: DashboardRow[],
   options: ColumnOptions = {}
 ): string {
@@ -151,8 +146,7 @@ function renderColumn(
 export function renderDashboard(
   rows: DashboardRow[],
   categories: string[],
-  filters: DashboardFilters,
-  meta: DashboardMeta = { lastScanChanges: null }
+  filters: DashboardFilters
 ): string {
   const query = new URLSearchParams();
   if (filters.status) query.set('status', filters.status);
@@ -160,30 +154,26 @@ export function renderDashboard(
   if (filters.category) query.set('category', filters.category);
   const exportQuery = query.toString();
 
-  const available = rows.filter((r) => r.status === 'AVAILABLE');
-  const soldOut = rows.filter((r) => r.status === 'SOLD_OUT');
-  // UNKNOWN means the check failed, which is NOT sold out. Putting it in the
-  // red column would tell the reader an item is gone when nobody established
-  // that, so it gets its own line rather than being folded into either side.
-  const unknown = rows.filter((r) => r.status === 'UNKNOWN');
+  // Three groups against the watch list, not two against current stock. See
+  // core/watch-list-grouping.ts for what each one means and why a size that was
+  // sold out before and is sold out now appears in none of them.
+  const groups = groupByWatchList(rows);
 
-  // The list below is current stock, not a diff, so it is never empty and the
-  // "nothing changed" news would otherwise have nowhere to appear. Stated as a
-  // note above the column rather than in place of it.
-  const nothingChanged = meta.lastScanChanges === 0;
+  // No baseline anywhere means nobody has pressed "Khởi tạo danh sách" yet.
+  // Distinct from an empty database: rows can exist with no list behind them,
+  // and telling those two apart is the difference between "press the button"
+  // and "something is wrong".
+  const needsInit = rows.length > 0 && rows.every((r) => r.previous_status === null);
+  const noData = rows.length === 0;
 
-  // When the last scan moved nothing, the sold-out list is the same list as
-  // last time and the customer asked for it out of the way -- what they act on
-  // is what CHANGED, and 472 unchanged rows bury that. The rows are only
-  // hidden, never dropped: the export and /changes still carry all of them.
-  //
-  // An explicit "chỉ hết hàng" filter overrides this. Someone who asked to see
-  // sold-out stock must get it, or the filter looks broken.
-  const collapseSoldOut = nothingChanged && !filters.status;
+  // Read off the groups the reader is looking at rather than an event tally.
+  // A count disagreeing with the columns under it is worse than no count.
+  const quiet = !needsInit && !noData && noChanges(groups);
 
-  const soldOutNote = nothingChanged
-    ? 'Lần quét gần nhất: không có thay đổi nào.'
-    : undefined;
+  // Never grouped, always reported: a failed check is not a sell-out.
+  const unknownCount = countUnknown(rows);
+
+  const goneNote = quiet ? 'Lần quét gần nhất: không có thay đổi nào.' : undefined;
 
   const lastChecked = rows.reduce<string | null>(
     (latest, r) => (!latest || r.last_checked_at > latest ? r.last_checked_at : latest),
@@ -208,7 +198,10 @@ export function renderDashboard(
   .btn { text-decoration:none; }
   .btn.primary { background:#111; color:#fff; border-color:#111; }
   main { display:grid; grid-template-columns:1fr 1fr; gap:0; }
-  @media (max-width: 860px) { main { grid-template-columns:1fr; } }
+  main.three { grid-template-columns:1fr 1fr 1fr; }
+  /* Three columns need more room than two before they turn into slivers. */
+  @media (max-width: 1200px) { main.three { grid-template-columns:1fr 1fr; } }
+  @media (max-width: 860px) { main, main.three { grid-template-columns:1fr; } }
   .col { padding:16px 22px; min-width:0; }
   .col + .col { border-left:1px solid #eee; }
   @media (max-width: 860px) { .col + .col { border-left:0; border-top:1px solid #eee; } }
@@ -216,6 +209,7 @@ export function renderDashboard(
   .dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
   .col.ok .dot { background:#22a447; }
   .col.out .dot { background:#dc2626; }
+  .col.new .dot { background:#2563eb; }
   .count { color:#888; font-weight:400; }
   ul { list-style:none; margin:0; padding:0; }
   li { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid #f2f2f2; }
@@ -225,6 +219,7 @@ export function renderDashboard(
   .line { display:block; text-decoration:none; font-weight:500; overflow-wrap:anywhere; }
   .col.ok .line { color:#15803d; }
   .col.out .line { color:#b91c1c; }
+  .col.new .line { color:#1d4ed8; }
   .meta { font-size:12px; color:#888; }
   .badge { font-size:10px; font-weight:700; color:#15803d; border:1px solid #22a447; border-radius:4px; padding:0 4px; margin-left:6px; vertical-align:1px; }
   .copy { flex:0 0 auto; cursor:pointer; color:#666; font-size:12px; padding:4px 8px; }
@@ -275,7 +270,9 @@ export function renderDashboard(
     ${STATUSES.map((s) => option(s, filters.status)).join('')}
   </select>
   <button type="submit">Lọc</button>
-  <button type="button" id="scan-btn" class="scan">Quét ngay</button>
+  <button type="button" id="scan-btn" class="scan" data-init="${needsInit || noData ? '1' : ''}">${
+    needsInit || noData ? 'Khởi tạo danh sách' : 'Quét ngay'
+  }</button>
   <span id="scan-status" class="scan-status"></span>
   <!-- Always present, not only after a scan that found something. The banner's
        "Xem chi tiết" link appears only when there were changes, so without this
@@ -287,14 +284,21 @@ export function renderDashboard(
 
 <div id="scan-result"></div>
 
-<main>
-  ${renderColumn('Còn hàng', 'ok', available)}
-  ${renderColumn('Hết hàng', 'out', soldOut, { note: soldOutNote, collapsed: collapseSoldOut })}
+${
+  needsInit
+    ? `<p class="note">Chưa có danh sách theo dõi. Bấm <strong>Khởi tạo danh sách</strong> để chốt danh sách hàng đang còn — từ lần quét sau, mọi thay đổi sẽ được so với danh sách này.</p>`
+    : ''
+}
+
+<main class="three">
+  ${renderColumn('Còn hàng', 'ok', groups.still)}
+  ${renderColumn('Hết hàng', 'out', groups.gone, { note: goneNote, collapsed: quiet })}
+  ${renderColumn('Sản phẩm mới', 'new', groups.fresh)}
 </main>
 
 ${
-  unknown.length > 0
-    ? `<p class="note">${unknown.length} mục chưa kiểm tra được ở lần quét gần nhất. Chúng <strong>không</strong> được xếp vào "hết hàng" — chưa ai xác nhận điều đó.</p>`
+  unknownCount > 0
+    ? `<p class="note">${unknownCount} mục chưa kiểm tra được ở lần quét gần nhất. Chúng <strong>không</strong> được xếp vào "hết hàng" — chưa ai xác nhận điều đó.</p>`
     : ''
 }
 
@@ -381,6 +385,14 @@ ${
         shownFinish = state.last.finishedAt;
         showResult(state.last);
       }
+      // Once an initialising scan finishes there IS a list, so the button must
+      // stop offering to create one. Done here rather than by reloading, which
+      // would yank the page from under someone mid-copy.
+      if (!state.running && state.last && btn.getAttribute('data-init') === '1') {
+        btn.setAttribute('data-init', '');
+        idleLabel = 'Quét ngay';
+        if (!btn.disabled) btn.innerHTML = idleLabel;
+      }
       if (!state.running && timer) { clearInterval(timer); timer = null; }
     }
 
@@ -390,10 +402,15 @@ ${
 
     // innerHTML rather than textContent: the label carries the spinner element.
     // Both states are literals defined here, so there is nothing to escape.
+    var idleLabel = btn.textContent;
+
     function setBusy(busy) {
       btn.innerHTML = busy
         ? '<span class="spin" aria-hidden="true"></span>Đang quét…'
-        : 'Quét ngay';
+        // Back to whatever the server rendered. Hard-coding "Quét ngay" here
+        // renamed the initialise button the moment the first scan finished,
+        // while data-init still said it would initialise.
+        : idleLabel;
       // Read aloud by screen readers, which cannot see a turning circle.
       btn.setAttribute('aria-busy', busy ? 'true' : 'false');
     }
@@ -404,7 +421,14 @@ ${
       // still for three seconds after a click reads as a click that missed.
       setBusy(true);
       out.textContent = 'Đang bắt đầu…';
-      fetch('/api/scan', { method: 'POST' })
+      // The initialise flag rides on the button that was actually rendered, so
+      // a page loaded before a list existed cannot start an ordinary scan and
+      // report every product in the shop as new.
+      fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initialise: btn.getAttribute('data-init') === '1' })
+      })
         .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
         .then(function (r) {
           if (r.status === 409) out.textContent = 'Đã có một lần quét đang chạy.';

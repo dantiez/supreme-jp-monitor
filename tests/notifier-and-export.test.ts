@@ -110,6 +110,9 @@ function row(over: Partial<DashboardRow> = {}): DashboardRow {
     size: 'Large',
     sku: 'FW26TS1-BLK-L',
     price: 15400, currency: 'JPY',
+    // Tracked by default: most rows in these tests stand for stock the reader
+    // is already watching. Override to null for something outside the list.
+    previous_status: 'AVAILABLE',
     status: 'AVAILABLE',
     url: 'https://jp.supreme.com/products/h1',
     delisted_at: null,
@@ -301,69 +304,73 @@ describe('listing changes reach Discord', () => {
   });
 });
 
-describe('the sold-out list is put away when nothing moved', () => {
-  const soldOut = row({ status: 'SOLD_OUT', name: 'Sith Skateboard' });
+describe('the dashboard groups against the watch list', () => {
+  const still = row({ previous_status: 'AVAILABLE', status: 'AVAILABLE', name: 'Still Selling' });
+  const gone = row({ previous_status: 'AVAILABLE', status: 'SOLD_OUT', name: 'Sith Skateboard' });
+  const fresh = row({ previous_status: 'SOLD_OUT', status: 'AVAILABLE', name: 'Brand New Cap' });
+  const stale = row({ previous_status: 'SOLD_OUT', status: 'SOLD_OUT', name: 'Long Gone Tee' });
 
-  it('hides the rows and keeps only the note', () => {
-    // What the reader acts on is what CHANGED. On a quiet day the sold-out
-    // list is identical to last time and buries that.
-    const html = renderDashboard([soldOut], [], {}, { lastScanChanges: 0 });
+  it('puts each row in the group its watch-list membership dictates', () => {
+    const html = renderDashboard([still, gone, fresh], [], {});
+    const green = html.slice(html.indexOf('col ok'), html.indexOf('col out'));
+    const red = html.slice(html.indexOf('col out'), html.indexOf('col new'));
+    const blue = html.slice(html.indexOf('col new'));
+
+    expect(green).toContain('Still Selling');
+    expect(red).toContain('Sith Skateboard');
+    expect(blue).toContain('Brand New Cap');
+  });
+
+  it('shows nothing that was already gone before this scan', () => {
+    // Sold out then, sold out now: nothing to act on. Several hundred of these
+    // are what buried the rows that mattered.
+    const html = renderDashboard([still, stale], [], {});
+    expect(html).not.toContain('Long Gone Tee');
+  });
+
+  it('says so, and empties the red column, when nothing moved', () => {
+    const html = renderDashboard([still], [], {});
     expect(html).toContain('không có thay đổi nào');
-    expect(html).not.toContain('Sith Skateboard');
   });
 
-  it('drops the count with them rather than claiming zero', () => {
-    // The rows still exist. "HẾT HÀNG 0" would be false, and the real number
-    // above an empty list would be a dangling figure.
-    const html = renderDashboard([soldOut], [], {}, { lastScanChanges: 0 });
-    // Read the red section alone -- the green column has its own count.
-    const outColumn = html.slice(html.indexOf('<section class="col out">'));
-    expect(outColumn).not.toContain('class="count"');
-    expect(outColumn).not.toContain('Không có mục nào.');
+  it('stays quiet about that when something DID move', () => {
+    expect(renderDashboard([still, gone], [], {})).not.toContain('không có thay đổi nào');
   });
 
-  it('still shows them when the reader asked for sold-out stock', () => {
-    // An explicit filter must win, or it looks broken.
-    const html = renderDashboard([soldOut], [], { status: 'SOLD_OUT' }, {
-      lastScanChanges: 0
-    });
-    expect(html).toContain('Sith Skateboard');
+  it('counts a new arrival as a change too', () => {
+    // Only checking the sold-out half would call a scan that found thirty new
+    // products "no changes".
+    expect(renderDashboard([still, fresh], [], {})).not.toContain('không có thay đổi nào');
   });
 
-  it('shows them whenever the last scan did move something', () => {
-    const html = renderDashboard([soldOut], [], {}, { lastScanChanges: 4 });
-    expect(html).toContain('Sith Skateboard');
-  });
-
-  it('shows them when nothing has been scanned yet', () => {
-    const html = renderDashboard([soldOut], [], {}, { lastScanChanges: null });
-    expect(html).toContain('Sith Skateboard');
+  it('never files an unreadable size under sold out', () => {
+    const unread = row({ previous_status: 'AVAILABLE', status: 'UNKNOWN', name: 'Unread Item' });
+    const html = renderDashboard([still, unread], [], {});
+    const red = html.slice(html.indexOf('col out'), html.indexOf('col new'));
+    expect(red).not.toContain('Unread Item');
+    expect(html).toContain('chưa kiểm tra được');
   });
 });
 
-describe('the sold-out column reports the last scan', () => {
-  it('says so when the last scan found nothing', () => {
-    // The column lists current stock, not a diff, so it is never empty and the
-    // "nothing changed" news would otherwise have nowhere to appear.
-    const html = renderDashboard([row({ status: 'SOLD_OUT' })], [], {}, {
-      lastScanChanges: 0
-    });
-    expect(html).toContain('không có thay đổi nào');
+describe('starting the watch list', () => {
+  it('offers to create one when no row has a baseline', () => {
+    const untracked = row({ previous_status: null, status: 'AVAILABLE' });
+    const html = renderDashboard([untracked], [], {});
+    expect(html).toContain('Khởi tạo danh sách');
+    // The flag the button posts, so an ordinary scan cannot reseed the list.
+    expect(html).toContain('data-init="1"');
   });
 
-  it('stays quiet when the last scan did find something', () => {
-    const html = renderDashboard([row({ status: 'SOLD_OUT' })], [], {}, {
-      lastScanChanges: 4
-    });
-    expect(html).not.toContain('không có thay đổi nào');
+  it('offers an ordinary scan once a list exists', () => {
+    const html = renderDashboard([row({ previous_status: 'AVAILABLE' })], [], {});
+    expect(html).toContain('Quét ngay');
+    expect(html).toContain('data-init=""');
   });
 
-  it('stays quiet when nothing has been scanned yet', () => {
-    // "The last check found nothing" and "nothing has been checked" must not
-    // look the same; only one of them is reassuring.
-    const html = renderDashboard([row({ status: 'SOLD_OUT' })], [], {}, {
-      lastScanChanges: null
-    });
+  it('does not claim "nothing changed" before a list exists', () => {
+    // With no baseline every row is 🔵, so the groups are not empty -- but
+    // saying "nothing changed" against a list nobody made would be nonsense.
+    const html = renderDashboard([row({ previous_status: null, status: 'SOLD_OUT' })], [], {});
     expect(html).not.toContain('không có thay đổi nào');
   });
 });
@@ -372,9 +379,8 @@ describe('getting to the changes page', () => {
   it('offers the link whether or not the last scan found anything', () => {
     // The post-scan banner links there too, but only when there were changes.
     // On a quiet day that leaves no way through.
-    for (const lastScanChanges of [null, 0, 4]) {
-      const html = renderDashboard([row({})], [], {}, { lastScanChanges });
-      expect(html).toContain('href="/changes"');
+    for (const previous_status of [null, 'AVAILABLE', 'SOLD_OUT']) {
+      expect(renderDashboard([row({ previous_status })], [], {})).toContain('href="/changes"');
     }
   });
 });

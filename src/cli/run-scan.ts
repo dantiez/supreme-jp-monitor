@@ -28,6 +28,7 @@ async function main(): Promise<void> {
   const started = Date.now();
   const summary = await runScan({
     maxProducts: maxRaw ? Number(maxRaw) : undefined,
+    initialise: process.argv.includes('--init'),
     collections: collectionsRaw ? collectionsRaw.split(',').map((c) => c.trim()) : undefined,
     notify: !process.argv.includes('--no-notify')
   });

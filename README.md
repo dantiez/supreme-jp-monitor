@@ -64,9 +64,10 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan` | One full sweep: discover, check, diff, store, alert |
 | `npm run scan -- --max=50` | Cap products checked (listing order is newest-first) |
 | `npm run scan -- --no-notify` | Record changes without posting |
+| `npm run scan -- --init` | Seed the watch list from this scan |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 108 tests |
+| `npm test` | Vitest: 121 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -157,15 +158,31 @@ The very first scan has nothing before it, so it lists what is in stock rather t
 
 ## The dashboard
 
-Two columns: **green for what can be bought, red for what cannot**, one line per product-colour-size, with a thumbnail and a copy button.
+**Three groups against a watch list, not two against current stock.**
 
-**Colour is part of every line** — `Box Logo Hooded Sweatshirt — Black — M`. Supreme ships one product per colourway, so without it two identical-looking lines are two different garments and the person copying one cannot tell which.
+The watch list is the set of sizes that were AVAILABLE at the previous scan, carried in `variants.previous_status`. Membership plus current status gives the only three answers the reader acts on:
 
-**Thumbnails, never the original image.** The full file is 834 KB and the 200px version is 11 KB; across ~300 products that is 248 MB versus 3.3 MB, which is the difference between a page that loads and one that does not.
+| | Meaning | What to do |
+|---|---|---|
+| 🟢 **Còn hàng** | in the list, still available | nothing |
+| 🔴 **Hết hàng** | in the list, confirmed sold out | pull the listing |
+| 🔵 **Sản phẩm mới** | not in the list, available now | could list it |
 
-**`UNKNOWN` is never filed under sold out.** A failed check gets its own note. Colouring it red would tell the reader an item is gone when nobody established that.
+**A size that was sold out before and is sold out now appears in none of them.** That is the point: there is nothing to do about it, and several hundred such rows were what buried the two that mattered.
 
----
+**The baseline is stored, not recomputed.** `status` is overwritten as the scan walks the catalogue, so by the time anyone loads the page the "before" side is gone. Storing it means the grouping survives a reload, a restart, and a second reader.
+
+**The baseline rolls.** Scan N is compared with scan N-1, so a size that sells out and is not dealt with immediately drops out of 🔴 at the next scan. The customer chose this over a baseline fixed at initialisation, having been shown that exact cost.
+
+**"Khởi tạo danh sách" appears when no list exists.** The migration deliberately leaves `previous_status` NULL rather than seeding it from current stock: seeding would keep the screen looking right while making the button impossible to ever see or press.
+
+**`UNKNOWN` is never 🔴**, even though the rule reads "no longer available". A failed check has not established that anything is gone; calling it sold out sends the reader to pull a listing that is still selling, and one bad network moment would empty the green column across the catalogue. It is counted and reported separately.
+
+**Withdrawn products are excluded.** A product that 404s is not stock. Left in, it shows as buyable -- and as 🔵, because scans no longer touch it so its baseline stays null.
+
+**Colour is part of every line** -- `Box Logo Hooded Sweatshirt — Black — M`. Supreme ships one product per colourway, so without it two identical-looking lines are two different garments.
+
+**Thumbnails, never the original image.** 834 KB versus 11 KB per image; across ~300 products that is 248 MB versus 3.3 MB.
 
 ## Export
 
@@ -178,6 +195,8 @@ Columns: `Product Name · Product URL · Category · Color · Size · SKU · Pri
 ---
 
 ## Known gaps
+
+- **Supreme rotates its product handles, and tracking is keyed on them.** Observed on 2026-08-28: every handle in the catalogue 404'd and the same products reappeared under new ones, so one scan recorded 268 DELISTED and 267 NEW_PRODUCT for a shop that had changed almost nothing. It resets the watch list, floods Discord, and loses restock history across the rotation. `variants.sku` (`FW26SH1-ORA-S` -- season, style, colour, size) survives it and is the obvious key to move to. NOT FIXED.
 
 - **A scan is two requests, not 268.** The listing embeds `products-json`: every product with every size and its stock flag, verified field-for-field against the individual product pages. Page one holds 250, page two the remaining 18. The site declares its own total (`allProductsCount`) and the run fails if fewer are read, so a short scan cannot pass as a complete one.
 - **Times are displayed in Tokyo, stored in UTC.** `timestamptz` holds an absolute instant; only the reading is localised. Set `DISPLAY_TIMEZONE` (e.g. `Asia/Ho_Chi_Minh`) to change the frame. The zone is named in the dashboard and in the export headers so a timestamp is never ambiguous.

@@ -132,3 +132,21 @@ BEGIN
     ALTER TABLE supreme_monitor.change_events ADD COLUMN IF NOT EXISTS currency text;
   END IF;
 END $$;
+
+-- The watch list: what was AVAILABLE at the previous scan.
+--
+-- The three groups the dashboard shows are all read off this one column, and it
+-- has to be STORED rather than recomputed: `status` is overwritten as the scan
+-- walks the catalogue, so by the time anyone loads the page the "before" side
+-- is already gone. Keeping it means the grouping survives a reload, a restart,
+-- and a second reader.
+--
+-- LEFT NULL ON PURPOSE, not seeded from the current state.
+--
+-- Seeding was the first instinct: it would make today's stock the list and keep
+-- the dashboard looking unchanged. But there IS no watch list yet -- nobody has
+-- made one -- and inventing one silently would mean the "Khởi tạo danh sách"
+-- button never appears, so the person who asked for it could never press it or
+-- see that it works. Null is the honest state, the dashboard says so in as many
+-- words, and one press fixes it.
+ALTER TABLE supreme_monitor.variants ADD COLUMN IF NOT EXISTS previous_status text;
