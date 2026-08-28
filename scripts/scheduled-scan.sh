@@ -16,7 +16,10 @@
 # bare `npm` works when tested by hand and silently fails at 3am.
 set -uo pipefail
 
-PROJECT_DIR="$HOME/Downloads/supreme-jp-monitor"
+# Derived from where this script actually is, never hardcoded: a fixed path
+# keeps pointing at wherever the repository used to be, and the failure is a
+# background job that silently stops working after a move.
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 NODE_BIN_DIR="/usr/local/bin"
 LOG_DIR="$HOME/Library/Logs/supreme-jp-monitor"
 
@@ -31,7 +34,7 @@ fi
 export PATH="$NODE_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin"
 
 cd "$PROJECT_DIR" || {
-  echo "$(date '+%F %T')  KHÔNG tìm thấy thư mục $PROJECT_DIR" >> "$LOG"
+  echo "$(date '+%F %T')  KHÔNG vào được thư mục $PROJECT_DIR" >> "$LOG"
   exit 1
 }
 
