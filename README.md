@@ -67,7 +67,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --init` | Seed the watch list from this scan |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 133 tests |
+| `npm test` | Vitest: 137 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -124,6 +124,10 @@ The database is already shared by both sides, which is why this needs no proxy, 
 | Worker | The owner's Mac | Claims requests and scans; also refreshes stale data |
 
 `ALLOW_SCANNING=false` on the hosted instance turns `POST /api/scan` from "scan" into "record the ask", answered **202 Accepted** -- accepted, not done, which is what actually happened.
+
+**Forgetting that variable costs seconds, not the feature.** A scan that fails with `WrongStoreError` queues the request instead of reporting a failure: the instance has just proved it cannot reach the shop, which is a fact about where it runs, not a fault. `ALLOW_SCANNING=false` only skips the wasted attempt. This matters because a Render service created by hand rather than from `render.yaml` has no such variable, and that mistake used to hand the reader an error.
+
+Other failures are not treated this way. A parser break or a dead database is not something another machine fixes, and neither is a queue that cannot be written to -- that one is reported honestly.
 
 **Repeated clicks collapse onto one request.** Three impatient presses mean one scan.
 

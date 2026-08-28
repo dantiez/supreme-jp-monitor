@@ -38,6 +38,8 @@ Bấm là xong. Nút sẽ báo *"Đã gửi yêu cầu, đang chờ máy quét�
 
 Bấm nhiều lần cũng chỉ chạy **một** lần quét, không sao cả.
 
+Đôi khi sẽ thấy dòng *"Máy chủ này không vào được cửa hàng Nhật, đã chuyển yêu cầu sang máy quét"* — **bình thường**, cứ chờ vài phút.
+
 **Nếu thấy báo "Đã chờ 5 phút — máy quét có thể đang tắt"**: máy quét chưa bật. Báo người quản lý.
 
 Ngoài ra dữ liệu cũng **tự làm mới hai tiếng một lần**, không cần ai bấm.
