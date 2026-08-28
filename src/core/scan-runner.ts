@@ -10,6 +10,8 @@
 // the next run -- never written as SOLD_OUT, which would fire a false alert.
 
 import { parseCataloguePage } from '../parsers/catalogue-parser.js';
+import { parseCurrency } from '../parsers/product-page-parser.js';
+import { assertExpectedStore } from './expected-store.js';
 import { fetchPage, collectionPath } from './supreme-client.js';
 import {
   detectChanges,
@@ -107,6 +109,12 @@ async function readCatalogue(collection: string): Promise<DiscoveryResult> {
       failed.push({ page, error: res.error });
       break;
     }
+
+    // Before anything is parsed, let alone written. A foreign storefront names
+    // the same garments with different handles, so recording one withdraws the
+    // whole real catalogue -- see core/expected-store.ts. Throwing here aborts
+    // the run with nothing saved.
+    assertExpectedStore(parseCurrency(res.html));
 
     const parsed = parseCataloguePage(res.html);
     if (!parsed) {

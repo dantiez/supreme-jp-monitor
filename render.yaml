@@ -12,6 +12,17 @@ services:
     name: supreme-jp-monitor
     runtime: node
     plan: free
+    # NOT singapore, and not any other region either -- see below.
+    #
+    # supreme.com picks a storefront from the caller's IP, and each storefront
+    # names the same garment with a different product handle. A Singapore
+    # instance was served the SGD store, so the scan saw 268 unfamiliar
+    # products, withdrew the entire Japanese catalogue and replaced it. Render
+    # has no Tokyo region, so NO Render region reaches the Japanese store.
+    #
+    # The scan now refuses rather than corrupting anything (core/expected-store),
+    # which means a deploy here can SERVE the dashboard but its scan button will
+    # fail. Scanning has to run somewhere that reaches the JP store.
     region: singapore
     buildCommand: npm ci
     startCommand: npm start

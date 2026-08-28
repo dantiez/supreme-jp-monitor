@@ -37,7 +37,13 @@ vi.mock('../src/notify/discord-notifier.js', () => ({ notifyChanges: vi.fn() }))
 vi.mock('../src/core/supreme-client.js', () => ({
   collectionPath: (h: string) => `/collections/${h}`,
   productPath: (h: string) => `/products/${h}`,
-  fetchPage: vi.fn(async () => ({ ok: true, html: 'x', status: 200 }))
+  // Must declare the Japanese store: the scan refuses to record a catalogue
+  // served by any other storefront, currency being the only way to tell.
+  fetchPage: vi.fn(async () => ({
+    ok: true,
+    html: "<script>window.ShopifyAnalytics.meta.currency = 'JPY';</script>",
+    status: 200
+  }))
 }));
 
 vi.mock('../src/parsers/catalogue-parser.js', () => ({
