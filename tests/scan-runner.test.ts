@@ -25,7 +25,7 @@ vi.mock('../src/db/monitor-repository.js', () => ({
     { handle: 'gone-a', name: 'A', color: null, url: 'u', delistedAt: null },
     { handle: 'gone-b', name: 'B', color: null, url: 'u', delistedAt: null }
   ]),
-  saveProduct: vi.fn(),
+  saveProducts: vi.fn(),
   recordChanges: vi.fn(),
   applyListingChanges: vi.fn()
 }));

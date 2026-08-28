@@ -66,92 +66,29 @@ export async function loadKnownVariants(): Promise<Map<string, KnownVariant>> {
  * `first_seen_at` is preserved on conflict; `last_seen_at` always advances, so
  * the pair answers "when did this appear" and "is it still listed".
  */
-/**
- * @param initialise Seed the watch list from THIS scan instead of carrying the
- *   previous one forward. Used by "Khởi tạo danh sách", where the point is that
- *   what is in stock right now becomes the baseline -- so it shows as "still in
- *   stock" rather than as several hundred new products.
- */
-export async function saveProduct(
-  product: ScrapedProduct,
-  initialise = false
-): Promise<void> {
-  await withTransaction(async (client) => {
-    await client.query(
-      `INSERT INTO supreme_monitor.products (handle, external_id, name, color, style, category, image_url, url, last_seen_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
-       ON CONFLICT (handle) DO UPDATE SET
-         external_id = EXCLUDED.external_id,
-         name        = EXCLUDED.name,
-         color       = EXCLUDED.color,
-         style       = EXCLUDED.style,
-         category    = EXCLUDED.category,
-         image_url   = EXCLUDED.image_url,
-         url         = EXCLUDED.url,
-         last_seen_at = now(),
-         -- Seeing it again clears the flag; detectListingChanges turns that
-         -- into a RELISTED event before this write happens.
-         delisted_at = NULL`,
-      [
-        product.handle,
-        product.externalId,
-        product.name,
-        product.color,
-        product.style,
-        product.category,
-        product.imageUrl,
-        product.url
-      ]
-    );
-
-    for (const variant of product.variants) {
-      await client.query(
-        `INSERT INTO supreme_monitor.variants (handle, size, sku, price, currency, status, previous_status, last_checked_at)
-         VALUES ($1,$2,$3,$4,$5,$6, CASE WHEN $7 THEN $6 ELSE NULL END, now())
-         ON CONFLICT (handle, size) DO UPDATE SET
-           sku             = EXCLUDED.sku,
-           price           = EXCLUDED.price,
-           currency        = EXCLUDED.currency,
-           -- Reads the row as it stands BEFORE this statement, which is exactly
-           -- the previous scan's answer. Assignment order does not affect it:
-           -- every right-hand side sees the old row.
-           previous_status = CASE WHEN $7 THEN EXCLUDED.status
-                                  ELSE supreme_monitor.variants.status END,
-           status          = EXCLUDED.status,
-           last_checked_at = now()`,
-        [
-          product.handle,
-          variant.size,
-          variant.sku,
-          variant.price,
-          variant.currency,
-          variant.status,
-          initialise
-        ]
-      );
-    }
-  });
-}
-
-/** Append detected changes to the immutable event log. */
 export async function recordChanges(changes: DetectedChange[]): Promise<void> {
   if (changes.length === 0) return;
 
+  // In bulk for the same reason as saveProducts: a drop day produces hundreds
+  // of events, and one round trip each is a minute of waiting for nothing.
   await withTransaction(async (client) => {
-    for (const c of changes) {
+    for (const batch of chunk(changes, BATCH_ROWS)) {
       await client.query(
         `INSERT INTO supreme_monitor.change_events
            (handle, size, event, previous_status, current_status, previous_price, current_price, currency)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+         SELECT * FROM unnest(
+           $1::text[], $2::text[], $3::text[], $4::text[],
+           $5::text[], $6::integer[], $7::integer[], $8::text[]
+         )`,
         [
-          c.handle,
-          c.size,
-          c.event,
-          c.previousStatus,
-          c.currentStatus,
-          c.previousPrice,
-          c.currentPrice,
-          c.currency
+          batch.map((c) => c.handle),
+          batch.map((c) => c.size),
+          batch.map((c) => c.event),
+          batch.map((c) => c.previousStatus),
+          batch.map((c) => c.currentStatus),
+          batch.map((c) => c.previousPrice),
+          batch.map((c) => c.currentPrice),
+          batch.map((c) => c.currency)
         ]
       );
     }
@@ -300,7 +237,7 @@ export async function applyListingChanges(changes: ListingChange[]): Promise<voi
           [c.handle]
         );
       }
-      // RELISTED needs no update: saveProduct already cleared delisted_at when
+      // RELISTED needs no update: saveProducts already cleared delisted_at when
       // it wrote the product it had just seen.
 
       await client.query(
@@ -513,4 +450,114 @@ export async function loadRemoteScanState(): Promise<{
         }
       : null
   };
+}
+
+/**
+ * How many rows go into one statement.
+ *
+ * The point of batching is to stop paying a network round trip per row, and
+ * nearly all of that saving arrives in the first few hundred. A cap keeps any
+ * single statement, and the parameter array behind it, a sane size.
+ */
+const BATCH_ROWS = 500;
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Write every scraped product and every size in a handful of statements.
+ *
+ * WHY THIS EXISTS. The previous version wrote one row per statement, in its own
+ * transaction: for 268 products and 996 sizes that is roughly 1,800 round trips
+ * to a database in another country. Measured at 80ms each, the scan spent about
+ * 144 seconds writing and 2 seconds reading Supreme -- 98% of the wait was
+ * network latency on writes nothing was waiting for individually.
+ *
+ * Same upserts, same semantics, sent in bulk. The previous-status carry-forward
+ * still reads the row as it stands before the statement, so the watch list
+ * behaves identically.
+ *
+ * ONE TRANSACTION FOR THE WHOLE SCAN. Per-product transactions meant a failure
+ * halfway through left half the catalogue updated against a baseline that had
+ * already moved. All or nothing is both faster and more honest.
+ */
+export async function saveProducts(
+  products: readonly ScrapedProduct[],
+  initialise = false
+): Promise<void> {
+  if (products.length === 0) return;
+
+  await withTransaction(async (client) => {
+    for (const batch of chunk(products, BATCH_ROWS)) {
+      await client.query(
+        `INSERT INTO supreme_monitor.products
+           (handle, external_id, name, color, style, category, image_url, url, last_seen_at)
+         SELECT * FROM unnest(
+           $1::text[], $2::text[], $3::text[], $4::text[],
+           $5::text[], $6::text[], $7::text[], $8::text[]
+         ) AS t(handle, external_id, name, color, style, category, image_url, url),
+         LATERAL (SELECT now()) AS s(last_seen_at)
+         ON CONFLICT (handle) DO UPDATE SET
+           external_id = EXCLUDED.external_id,
+           name        = EXCLUDED.name,
+           color       = EXCLUDED.color,
+           style       = EXCLUDED.style,
+           category    = EXCLUDED.category,
+           image_url   = EXCLUDED.image_url,
+           url         = EXCLUDED.url,
+           last_seen_at = now(),
+           -- Seeing it again clears the flag; detectListingChanges turns that
+           -- into a RELISTED event before this write happens.
+           delisted_at = NULL`,
+        [
+          batch.map((p) => p.handle),
+          batch.map((p) => p.externalId),
+          batch.map((p) => p.name),
+          batch.map((p) => p.color),
+          batch.map((p) => p.style),
+          batch.map((p) => p.category),
+          batch.map((p) => p.imageUrl),
+          batch.map((p) => p.url)
+        ]
+      );
+    }
+
+    const rows = products.flatMap((p) =>
+      p.variants.map((v) => ({ handle: p.handle, ...v }))
+    );
+
+    for (const batch of chunk(rows, BATCH_ROWS)) {
+      await client.query(
+        `INSERT INTO supreme_monitor.variants
+           (handle, size, sku, price, currency, status, previous_status, last_checked_at)
+         SELECT handle, size, sku, price, currency, status,
+                CASE WHEN $7 THEN status ELSE NULL END, now()
+           FROM unnest(
+             $1::text[], $2::text[], $3::text[], $4::integer[], $5::text[], $6::text[]
+           ) AS t(handle, size, sku, price, currency, status)
+         ON CONFLICT (handle, size) DO UPDATE SET
+           sku             = EXCLUDED.sku,
+           price           = EXCLUDED.price,
+           currency        = EXCLUDED.currency,
+           -- Reads the row as it stands BEFORE this statement, which is exactly
+           -- the previous scan's answer.
+           previous_status = CASE WHEN $7 THEN EXCLUDED.status
+                                  ELSE supreme_monitor.variants.status END,
+           status          = EXCLUDED.status,
+           last_checked_at = now()`,
+        [
+          batch.map((r) => r.handle),
+          batch.map((r) => r.size),
+          batch.map((r) => r.sku),
+          batch.map((r) => r.price),
+          batch.map((r) => r.currency),
+          batch.map((r) => r.status),
+          initialise
+        ]
+      );
+    }
+  });
 }

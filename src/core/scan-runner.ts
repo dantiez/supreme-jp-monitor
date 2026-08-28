@@ -203,14 +203,24 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
     const knownVariants = await repo.loadKnownVariants();
     const firstRun = knownHandles.size === 0;
 
+    // Detect first, across everything, THEN write.
+    //
+    // The old loop wrote each product as it went, which was correct only
+    // because the baseline it compares against (knownHandles / knownVariants)
+    // was read into memory before the loop started. Doing all the detection up
+    // front makes that independence explicit instead of incidental -- and it is
+    // what allows the writes to be sent in bulk.
     for (const product of capped) {
-      const changes = detectChanges(product, knownHandles, knownVariants);
-      await repo.saveProduct(product, initialise);
-      await repo.recordChanges(changes);
-
-      summary.changes.push(...changes);
+      summary.changes.push(...detectChanges(product, knownHandles, knownVariants));
       summary.scanned++;
     }
+
+    // Two statements' worth of round trips instead of eighteen hundred. At the
+    // measured 80ms to Neon that is the difference between a scan that takes
+    // two minutes and one that takes a few seconds; 98% of the old wait was
+    // write latency, not Supreme.
+    await repo.saveProducts(capped, initialise);
+    await repo.recordChanges(summary.changes);
 
     // Products that vanished from the shop.
     //
