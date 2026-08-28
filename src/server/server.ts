@@ -91,11 +91,19 @@ app.post('/api/scan', express.json(), (req, res) => {
   // Enforced at the route, not only by hiding the controls. A hidden button is
   // a suggestion: anyone can still POST, and a page cached from before the
   // setting changed still carries live ones.
+  // This instance cannot scan, but the person asking is sitting in front of it,
+  // not in front of the machine that can. So the ask is recorded and the worker
+  // on that machine picks it up. Answered 202 rather than 200: accepted, not
+  // done, which is exactly what happened.
   if (!SCANNING_ENABLED) {
-    res.status(403).json({
-      ok: false,
-      error: 'Máy chủ này chỉ để xem. Việc quét chạy trên máy khác.'
-    });
+    void repo
+      .requestScan()
+      .then((request) => {
+        res.status(202).json({ ok: true, queued: true, requestedAt: request.requested_at });
+      })
+      .catch((e: Error) => {
+        res.status(500).json({ ok: false, error: e.message });
+      });
     return;
   }
 
@@ -112,8 +120,33 @@ app.post('/api/scan', express.json(), (req, res) => {
   res.status(202).json({ ok: true, state: getScanState() });
 });
 
-app.get('/api/scan/status', (_req, res) => {
-  res.json(getScanState());
+// Merges what this process knows with what the database knows.
+//
+// On the hosted dashboard the in-process state is always empty -- no scan ever
+// starts here -- so reporting it alone would say "nothing has ever run" while a
+// scan was in progress on another machine. Where this instance does scan, the
+// in-process state is the fresher of the two and wins.
+app.get('/api/scan/status', async (_req, res) => {
+  const local = getScanState();
+  if (local.running || SCANNING_ENABLED) {
+    res.json({ ...local, pendingSince: null });
+    return;
+  }
+
+  try {
+    const remote = await repo.loadRemoteScanState();
+    res.json({
+      running: remote.running,
+      startedAt: remote.startedAt,
+      finishedAt: remote.last?.finishedAt ?? null,
+      pendingSince: remote.pendingSince,
+      last: remote.last
+        ? { ...remote.last, startedAt: remote.startedAt ?? '', failed: 0, listingChanges: 0, error: null }
+        : null
+    });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
 app.get('/', async (req, res) => {

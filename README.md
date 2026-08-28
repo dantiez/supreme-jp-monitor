@@ -67,7 +67,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --init` | Seed the watch list from this scan |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 132 tests |
+| `npm test` | Vitest: 133 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -106,20 +106,34 @@ On loopback there is no password and no prompt -- the reader already owns the ma
 
 `/healthz` stays open: the platform probes it before routing traffic, and it answers liveness and nothing else.
 
-### Deploying: the dashboard is hosted, the scanning is not
+### Deploying: the button is here, the scanning is there
 
-**Where a scan runs is a correctness requirement, not a latency preference.** supreme.com serves a storefront picked from the caller's IP, and each storefront renames every product, so a scan from the wrong country records a stranger's catalogue over this one. Render has no Tokyo region -- no Render instance can scan. Fly.io `nrt` could, and wants a payment method.
+**Where a scan runs is a correctness requirement, not a latency preference.** supreme.com serves a storefront picked from the caller's IP, and each storefront renames every product, so a scan from the wrong country records a stranger's catalogue over this one. Render has no Tokyo region -- no Render instance can ever scan.
 
-So the two halves live apart:
+But the reader who wants fresh data is sitting in front of the hosted dashboard, not in front of the machine that can scan. So the button records the **ask**, and the machine that can scan serves it:
+
+```
+reader presses Quét ngay  ->  hosted instance writes a row  ->  worker on the Mac claims it and scans
+```
+
+The database is already shared by both sides, which is why this needs no proxy, no open port and no second service.
 
 | | Runs where | Does what |
 |---|---|---|
-| Dashboard | Render, free plan | Serves the page to whoever has the link |
-| Scanning | The owner's Mac, which reaches the JP store | Refreshes the data on a schedule |
+| Dashboard | Render, free plan | Serves the page; queues scan requests |
+| Worker | The owner's Mac | Claims requests and scans; also refreshes stale data |
 
-`ALLOW_SCANNING=false` on the hosted instance hides both scan controls and makes `POST /api/scan` answer 403. The scan already refuses a foreign storefront, so this is not what keeps the data safe -- it is what stops a reader being handed buttons that could only fail. It defaults to enabled, so the local run is never crippled by omission.
+`ALLOW_SCANNING=false` on the hosted instance turns `POST /api/scan` from "scan" into "record the ask", answered **202 Accepted** -- accepted, not done, which is what actually happened.
 
-**Scheduling the scan (macOS):**
+**Repeated clicks collapse onto one request.** Three impatient presses mean one scan.
+
+**`Khởi tạo danh sách` stays on the machine that scans.** It discards the baseline, taking the red items still waiting to be acted on with it; that is not something to hand to a second reader through a queue whose consequences they cannot see.
+
+**Status is read from the database when this instance does not scan.** The in-process state is always empty there, so reporting it alone would say "nothing has ever run" while a scan was in progress on another machine.
+
+**A request nobody picks up says so.** After five minutes the status line reads "máy quét có thể đang tắt" instead of spinning forever -- the Mac is asleep, and a spinner that never resolves is worse than the truth.
+
+**Installing the worker (macOS):**
 
 ```bash
 cp scripts/com.supreme-jp-monitor.scan.plist ~/Library/LaunchAgents/
@@ -127,9 +141,11 @@ launchctl load ~/Library/LaunchAgents/com.supreme-jp-monitor.scan.plist
 tail -f ~/Library/Logs/supreme-jp-monitor/scan.log
 ```
 
-Every two hours, while the machine is awake -- launchd will not wake a sleeping Mac, it runs the job once it is up again. `scripts/scheduled-scan.sh` uses absolute paths throughout: launchd gives a job almost no environment, and a bare `npm` works when tested by hand and silently fails at 3am.
+Every minute. That sounds like a lot for a job that scans every two hours, but the check exits in well under a second with nothing to do, and it is what makes the button on the other machine feel like a button. `scripts/scheduled-scan.sh` uses absolute paths throughout: launchd gives a job almost no environment, and a bare `npm` works when tested by hand and silently fails at 3am.
 
-**What this costs:** nothing is watched while that Mac is asleep, and the reader cannot refresh on demand. That is the trade taken in place of a payment method.
+**One shot, not a daemon.** The worker checks once and exits. A long-lived loop would need its own supervision, restart story, and answer for a laptop that sleeps mid-wait; a process that exits has none of those, and the cost is up to a minute of latency on a job that takes two.
+
+**What this still costs:** nothing is watched while that Mac is asleep, and a request made then waits until it wakes.
 
 ## Layout
 

@@ -377,3 +377,140 @@ export async function loadChangesForScan(scanId: number): Promise<ChangeRow[]> {
   return res.rows;
 }
 
+
+export interface ScanRequest {
+  id: number;
+  requested_at: string;
+  claimed_at: string | null;
+}
+
+/**
+ * Record that someone asked for a scan.
+ *
+ * Collapses onto an existing unclaimed request rather than queueing another:
+ * three impatient clicks mean one scan, not three. Returns the request that
+ * now stands, whether it was just made or already waiting.
+ */
+export async function requestScan(): Promise<ScanRequest> {
+  const existing = await query<ScanRequest>(
+    `SELECT id, requested_at, claimed_at FROM supreme_monitor.scan_requests
+      WHERE claimed_at IS NULL ORDER BY requested_at LIMIT 1`
+  );
+  if (existing.rows[0]) return existing.rows[0];
+
+  const created = await query<ScanRequest>(
+    `INSERT INTO supreme_monitor.scan_requests DEFAULT VALUES
+     RETURNING id, requested_at, claimed_at`
+  );
+  return created.rows[0]!;
+}
+
+/** The oldest request nobody has taken, or null. */
+export async function pendingScanRequest(): Promise<ScanRequest | null> {
+  const res = await query<ScanRequest>(
+    `SELECT id, requested_at, claimed_at FROM supreme_monitor.scan_requests
+      WHERE claimed_at IS NULL ORDER BY requested_at LIMIT 1`
+  );
+  return res.rows[0] ?? null;
+}
+
+/**
+ * Take the oldest waiting request, if there is one.
+ *
+ * The WHERE clause does the locking: two workers racing on the same row, only
+ * one UPDATE sees claimed_at still NULL, so only one gets a row back.
+ */
+export async function claimScanRequest(): Promise<ScanRequest | null> {
+  const res = await query<ScanRequest>(
+    `UPDATE supreme_monitor.scan_requests SET claimed_at = now()
+      WHERE id = (SELECT id FROM supreme_monitor.scan_requests
+                   WHERE claimed_at IS NULL ORDER BY requested_at LIMIT 1)
+        AND claimed_at IS NULL
+  RETURNING id, requested_at, claimed_at`
+  );
+  return res.rows[0] ?? null;
+}
+
+export async function finishScanRequest(id: number, error: string | null): Promise<void> {
+  await query(
+    `UPDATE supreme_monitor.scan_requests SET finished_at = now(), error = $2 WHERE id = $1`,
+    [id, error]
+  );
+}
+
+/**
+ * Scan state as the DATABASE sees it, for an instance that does not scan.
+ *
+ * The in-process state only knows about scans this process started, and on the
+ * hosted dashboard that is never any of them. Without this the page would
+ * report "no scan has ever run" while one was running on another machine.
+ */
+export async function loadRemoteScanState(): Promise<{
+  running: boolean;
+  startedAt: string | null;
+  pendingSince: string | null;
+  last: {
+    ok: boolean;
+    finishedAt: string;
+    durationMs: number;
+    scanned: number;
+    changes: number;
+    byEvent: Record<string, number>;
+  } | null;
+}> {
+  const [live, pending, finished] = await Promise.all([
+    query<{ started_at: string }>(
+      `SELECT started_at FROM supreme_monitor.scan_runs
+        WHERE finished_at IS NULL ORDER BY id DESC LIMIT 1`
+    ),
+    query<{ requested_at: string }>(
+      `SELECT requested_at FROM supreme_monitor.scan_requests
+        WHERE claimed_at IS NULL ORDER BY requested_at LIMIT 1`
+    ),
+    query<{
+      id: number;
+      started_at: string;
+      finished_at: string;
+      products_scanned: number;
+      changes_detected: number;
+      status: string;
+    }>(
+      `SELECT id, started_at, finished_at, products_scanned, changes_detected, status
+         FROM supreme_monitor.scan_runs
+        WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT 1`
+    )
+  ]);
+
+  const run = finished.rows[0] ?? null;
+  let byEvent: Record<string, number> = {};
+
+  if (run) {
+    // Events carry no run id, so they are matched by the run's time window --
+    // the same join the changes page uses.
+    const events = await query<{ event: string; n: number }>(
+      `SELECT e.event, count(*)::int AS n
+         FROM supreme_monitor.change_events e
+        WHERE e.detected_at >= $1 AND e.detected_at <= $2
+        GROUP BY e.event`,
+      [run.started_at, run.finished_at]
+    );
+    byEvent = Object.fromEntries(events.rows.map((r) => [r.event, Number(r.n)]));
+  }
+
+  return {
+    running: live.rows.length > 0,
+    startedAt: live.rows[0]?.started_at ?? null,
+    pendingSince: pending.rows[0]?.requested_at ?? null,
+    last: run
+      ? {
+          ok: run.status === 'ok',
+          finishedAt: run.finished_at,
+          durationMs:
+            new Date(run.finished_at).getTime() - new Date(run.started_at).getTime(),
+          scanned: Number(run.products_scanned),
+          changes: Number(run.changes_detected),
+          byEvent
+        }
+      : null
+  };
+}

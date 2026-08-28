@@ -255,22 +255,23 @@ export function renderDashboard(
 </header>
 
 <nav class="toolbar">
+  <!-- Present on both sides. Where this instance can scan, it scans; where it
+       cannot, it records the ask and the machine that can picks it up. Same
+       button, same words: the reader wants fresh data, and how that happens is
+       not their problem. -->
+  <button type="button" id="scan-btn" class="scan" data-queued="${
+    mode.scanningEnabled ? '' : '1'
+  }">Quét ngay</button>
   ${
     mode.scanningEnabled
-      ? `<button type="button" id="scan-btn" class="scan">Quét ngay</button>
-  <!-- Its own control rather than a label the scan button borrows. The two do
-       different things -- one measures against the list, the other replaces it
-       -- and a button that silently changes meaning is the harder one to trust.
-       The highlight class only draws the eye; it stays clickable either way,
-       because re-seeding after acting on a batch is a real thing to want. -->
-  <button type="button" id="init-btn" class="btn init${
-    needsInit || noData ? ' wanted' : ''
-  }" data-has-list="${needsInit || noData ? '' : '1'}">Khởi tạo danh sách</button>`
-      : // Both scan controls go, not just one: neither can work from here, and
-        // half a set is more confusing than none. What stays is where to look
-        // instead -- the header already carries the time of the last update,
-        // which is the question this replaces.
-        '<span class="scan-status">Dữ liệu được cập nhật tự động — trang này chỉ để xem.</span>'
+      ? // Initialise stays on the machine that scans. It DISCARDS the baseline
+        // -- the red items still waiting to be acted on go with it -- and that
+        // is not a thing to hand to a second reader through a queue they
+        // cannot see the consequences of.
+        `<button type="button" id="init-btn" class="btn init${
+          needsInit || noData ? ' wanted' : ''
+        }" data-has-list="${needsInit || noData ? '' : '1'}">Khởi tạo danh sách</button>`
+      : ''
   }
   <a class="btn" href="/changes">Xem thay đổi</a>
   <span id="scan-status" class="scan-status"></span>
@@ -370,6 +371,15 @@ ${
 
     function describe(state) {
       if (state.running) return 'Đang quét… (khoảng 100 giây)';
+      if (state.pendingSince) {
+        // Nothing has picked the request up. Usually the machine is simply
+        // between checks; past a few minutes it is probably asleep, and saying
+        // so beats a spinner that never resolves.
+        var waited = Math.round((Date.now() - new Date(state.pendingSince).getTime()) / 60000);
+        return waited >= 5
+          ? 'Đã chờ ' + waited + ' phút — máy quét có thể đang tắt.'
+          : 'Đã gửi yêu cầu, đang chờ máy quét…';
+      }
       if (!state.last) return '';
       var l = state.last;
       if (!l.ok) return 'Lần quét trước lỗi.';
@@ -379,8 +389,12 @@ ${
     var shownFinish = null;
 
     function render(state) {
-      buttons.forEach(function (b) { if (b) b.disabled = state.running; });
-      setBusy(active, state.running);
+      // Waiting for the worker counts as busy: the reader asked, and something
+      // is going to happen. Re-enabling the button here would invite a second
+      // click that only collapses onto the same request.
+      var busy = state.running || !!state.pendingSince;
+      buttons.forEach(function (b) { if (b) b.disabled = busy; });
+      setBusy(active, busy);
       out.textContent = describe(state);
 
       // Only announce a result once. Polling repeats the same finished state,
@@ -389,7 +403,7 @@ ${
         shownFinish = state.last.finishedAt;
         showResult(state.last);
       }
-      if (!state.running && timer) { clearInterval(timer); timer = null; }
+      if (!busy && timer) { clearInterval(timer); timer = null; }
 
       // Once any scan has run there is a list, so stop shouting about the
       // initialise button. It stays clickable -- only the highlight goes.
@@ -430,6 +444,8 @@ ${
         .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
         .then(function (r) {
           if (r.status === 409) out.textContent = 'Đã có một lần quét đang chạy.';
+          // 202: recorded, not run. The worker on the other machine takes it.
+          if (r.status === 202) out.textContent = 'Đã gửi yêu cầu, đang chờ máy quét…';
           if (r.body && r.body.state) render(r.body.state);
           if (!timer) timer = setInterval(poll, 3000);
         })
