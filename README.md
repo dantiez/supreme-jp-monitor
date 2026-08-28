@@ -67,7 +67,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --init` | Seed the watch list from this scan |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 128 tests |
+| `npm test` | Vitest: 132 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -106,13 +106,30 @@ On loopback there is no password and no prompt -- the reader already owns the ma
 
 `/healthz` stays open: the platform probes it before routing traffic, and it answers liveness and nothing else.
 
-### Deploying
+### Deploying: the dashboard is hosted, the scanning is not
 
-`render.yaml` describes a free web service. `npm ci && npm start`, health check on `/healthz`, `HOST=0.0.0.0`, and four secrets entered in the dashboard rather than committed: `DATABASE_URL`, `DASHBOARD_PASSWORD`, `DISCORD_WEBHOOK_URL`.
+**Where a scan runs is a correctness requirement, not a latency preference.** supreme.com serves a storefront picked from the caller's IP, and each storefront renames every product, so a scan from the wrong country records a stranger's catalogue over this one. Render has no Tokyo region -- no Render instance can scan. Fly.io `nrt` could, and wants a payment method.
 
-**`tsx` is a runtime dependency, not a dev one.** The server runs TypeScript directly. Render installs with `NODE_ENV=production` and skips `devDependencies`, so `tsx` sitting there meant the deploy would install cleanly and then fail on start with `tsx: not found`. Verified with `npm ci --omit=dev`.
+So the two halves live apart:
 
-**The free plan stops the instance after ~15 minutes of no traffic.** The first page load after a quiet spell waits ~30-60s for a cold start before the ~100s scan can even begin. Nothing is lost -- state lives in Neon -- but the wait is real; `plan: starter` removes it.
+| | Runs where | Does what |
+|---|---|---|
+| Dashboard | Render, free plan | Serves the page to whoever has the link |
+| Scanning | The owner's Mac, which reaches the JP store | Refreshes the data on a schedule |
+
+`ALLOW_SCANNING=false` on the hosted instance hides both scan controls and makes `POST /api/scan` answer 403. The scan already refuses a foreign storefront, so this is not what keeps the data safe -- it is what stops a reader being handed buttons that could only fail. It defaults to enabled, so the local run is never crippled by omission.
+
+**Scheduling the scan (macOS):**
+
+```bash
+cp scripts/com.supreme-jp-monitor.scan.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.supreme-jp-monitor.scan.plist
+tail -f ~/Library/Logs/supreme-jp-monitor/scan.log
+```
+
+Every two hours, while the machine is awake -- launchd will not wake a sleeping Mac, it runs the job once it is up again. `scripts/scheduled-scan.sh` uses absolute paths throughout: launchd gives a job almost no environment, and a bare `npm` works when tested by hand and silently fails at 3am.
+
+**What this costs:** nothing is watched while that Mac is asleep, and the reader cannot refresh on demand. That is the trade taken in place of a payment method.
 
 ## Layout
 

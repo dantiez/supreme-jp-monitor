@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Runs a scan every two hours on this machine.
+
+  Install:
+    cp scripts/com.supreme-jp-monitor.scan.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.supreme-jp-monitor.scan.plist
+
+  Check:   launchctl list | grep supreme
+  Log:     tail -f ~/Library/Logs/supreme-jp-monitor/scan.log
+  Stop:    launchctl unload ~/Library/LaunchAgents/com.supreme-jp-monitor.scan.plist
+
+  Replace dannguyentien below if the account differs -- launchd expands neither
+  ~ nor $HOME inside a ProgramArguments path.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.supreme-jp-monitor.scan</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/dannguyentien/Downloads/supreme-jp-monitor/scripts/scheduled-scan.sh</string>
+  </array>
+
+  <!-- Every two hours, and only while the Mac is awake: launchd will not wake a
+       sleeping machine for this, it runs the job once the machine is up. -->
+  <key>StartInterval</key>
+  <integer>7200</integer>
+
+  <!-- Not at load time: loading during setup would start a scan while someone
+       is still editing configuration. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/dannguyentien/Library/Logs/supreme-jp-monitor/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/dannguyentien/Library/Logs/supreme-jp-monitor/launchd.err.log</string>
+</dict>
+</plist>

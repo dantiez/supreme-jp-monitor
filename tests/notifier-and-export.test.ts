@@ -416,3 +416,33 @@ describe('the toolbar holds three controls and nothing else', () => {
     expect(html).not.toContain('Tải Excel');
   });
 });
+
+describe('an instance that cannot reach the Japanese store', () => {
+  const tracked = row({ previous_status: 'AVAILABLE', status: 'AVAILABLE' });
+  const viewOnly = renderDashboard([tracked], {}, { scanningEnabled: false });
+
+  it('offers neither scan control', () => {
+    // Both go, not just one. Neither can work from here, and half a set is
+    // more confusing than none.
+    expect(viewOnly).not.toContain('id="scan-btn"');
+    expect(viewOnly).not.toContain('id="init-btn"');
+    expect(viewOnly).toContain('chỉ để xem');
+  });
+
+  it('keeps the data and the way to the history', () => {
+    // Read-only is the point; crippling the rest would defeat it.
+    expect(viewOnly).toContain('href="/changes"');
+    expect(viewOnly).toContain('Box Logo Tee');
+    expect(viewOnly).toContain('Còn hàng');
+  });
+
+  it('keeps both controls where scanning does work', () => {
+    const local = renderDashboard([tracked], {}, { scanningEnabled: true });
+    expect(local).toContain('id="scan-btn"');
+    expect(local).toContain('id="init-btn"');
+  });
+
+  it('defaults to enabled, so the local run is never crippled by omission', () => {
+    expect(renderDashboard([tracked], {})).toContain('id="scan-btn"');
+  });
+});

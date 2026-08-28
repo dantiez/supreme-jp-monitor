@@ -29,12 +29,19 @@ export class WrongStoreError extends Error {
     readonly found: string | null,
     readonly expected: string = EXPECTED_CURRENCY
   ) {
+    // Written for the person who sees it, which is whoever pressed the button
+    // -- not necessarily the person who deployed this. It has to say what
+    // happened, that nothing was damaged, and what to do, in that order. The
+    // previous wording was three lines of English about product handles, which
+    // told a non-technical reader only that something had broken.
     super(
       found === null
-        ? `The listing page declared no currency, so there is no evidence it is the ${expected} store. Refusing to record it.`
-        : `Served the ${found} store, not ${expected}. Each storefront gives the same product a different handle, so recording this ` +
-          `would withdraw the entire ${expected} catalogue and replace it. Refusing. ` +
-          `The storefront follows the caller's IP: run the scan from a location that reaches the ${expected} store.`
+        ? `Trang Supreme không cho biết đơn vị tiền tệ, nên không xác nhận được đây là cửa hàng Nhật. ` +
+          `Đã dừng, chưa ghi gì cả.`
+        : `Máy chủ này đang vào cửa hàng ${found}, không phải cửa hàng Nhật (${expected}). ` +
+          `Supreme chọn cửa hàng theo vị trí máy gọi, và mỗi cửa hàng đặt mã sản phẩm khác nhau — ` +
+          `ghi vào sẽ xoá sạch toàn bộ danh sách hàng Nhật. ` +
+          `Đã dừng, dữ liệu vẫn nguyên vẹn. Hãy chạy quét từ máy vào được cửa hàng Nhật.`
     );
     this.name = 'WrongStoreError';
   }
