@@ -67,7 +67,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --init` | Seed the watch list from this scan |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 125 tests |
+| `npm test` | Vitest: 127 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -174,7 +174,9 @@ The watch list is the set of sizes that were AVAILABLE at the previous scan, car
 
 **The baseline rolls.** Scan N is compared with scan N-1, so a size that sells out and is not dealt with immediately drops out of 🔴 at the next scan. The customer chose this over a baseline fixed at initialisation, having been shown that exact cost.
 
-**"Khởi tạo danh sách" appears when no list exists.** The migration deliberately leaves `previous_status` NULL rather than seeding it from current stock: seeding would keep the screen looking right while making the button impossible to ever see or press.
+**Three controls, not two with a shape-shifting label.** `Quét ngay` measures against the list; `Khởi tạo danh sách` replaces it; `Xem thay đổi` opens the history. The initialise action used to be the scan button wearing a different name, which meant it disappeared after the first run and a deliberate re-seed became impossible. It is now always present, highlighted only while no list exists, and asks for confirmation before discarding a real baseline -- re-seeding drops the red items still waiting to be acted on.
+
+**The baseline starts empty rather than seeded.** The migration deliberately leaves `previous_status` NULL rather than seeding it from current stock: seeding would keep the screen looking right while making the button impossible to ever see or press.
 
 **`UNKNOWN` is never 🔴**, even though the rule reads "no longer available". A failed check has not established that anything is gone; calling it sold out sends the reader to pull a listing that is still selling, and one bad network moment would empty the green column across the catalogue. It is counted and reported separately.
 

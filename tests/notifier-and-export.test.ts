@@ -352,23 +352,42 @@ describe('the dashboard groups against the watch list', () => {
   });
 });
 
-describe('starting the watch list', () => {
-  it('offers to create one when no row has a baseline', () => {
-    const untracked = row({ previous_status: null, status: 'AVAILABLE' });
-    const html = renderDashboard([untracked], [], {});
+describe('the three controls in the toolbar', () => {
+  const tracked = row({ previous_status: 'AVAILABLE', status: 'AVAILABLE' });
+  const untracked = row({ previous_status: null, status: 'AVAILABLE' });
+
+  it('offers scan, changes and initialise at all times', () => {
+    // Three separate controls. The initialise button used to be the scan
+    // button wearing a different label, which meant it vanished after the
+    // first run and a deliberate re-seed became impossible.
+    const html = renderDashboard([tracked], [], {});
+    expect(html).toContain('id="scan-btn"');
+    expect(html).toContain('id="init-btn"');
+    expect(html).toContain('href="/changes"');
+    expect(html).toContain('Quét ngay');
     expect(html).toContain('Khởi tạo danh sách');
-    // The flag the button posts, so an ordinary scan cannot reseed the list.
-    expect(html).toContain('data-init="1"');
   });
 
-  it('offers an ordinary scan once a list exists', () => {
-    const html = renderDashboard([row({ previous_status: 'AVAILABLE' })], [], {});
-    expect(html).toContain('Quét ngay');
-    expect(html).toContain('data-init=""');
+  it('keeps all three before any list exists', () => {
+    const html = renderDashboard([untracked], [], {});
+    expect(html).toContain('id="scan-btn"');
+    expect(html).toContain('id="init-btn"');
+    expect(html).toContain('href="/changes"');
+  });
+
+  it('highlights initialise only while there is no list to lose', () => {
+    expect(renderDashboard([untracked], [], {})).toContain('init wanted');
+    expect(renderDashboard([tracked], [], {})).not.toContain('init wanted');
+  });
+
+  it('marks whether a list already exists, which is what gates the warning', () => {
+    // The confirm fires only when re-seeding would discard a real baseline.
+    expect(renderDashboard([tracked], [], {})).toContain('data-has-list="1"');
+    expect(renderDashboard([untracked], [], {})).toContain('data-has-list=""');
   });
 
   it('does not claim "nothing changed" before a list exists', () => {
-    // With no baseline every row is 🔵, so the groups are not empty -- but
+    // With no baseline every row is new, so the groups are not empty -- but
     // saying "nothing changed" against a list nobody made would be nonsense.
     const html = renderDashboard([row({ previous_status: null, status: 'SOLD_OUT' })], [], {});
     expect(html).not.toContain('không có thay đổi nào');
