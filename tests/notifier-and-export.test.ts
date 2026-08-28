@@ -200,7 +200,7 @@ describe('dashboard rendering', () => {
     expect(escapeHtml('<script>alert(1)</script>')).toBe(
       '&lt;script&gt;alert(1)&lt;/script&gt;'
     );
-    const html = renderDashboard([row({ name: '<img src=x onerror=1>' })], [], {});
+    const html = renderDashboard([row({ name: '<img src=x onerror=1>' })], {});
     expect(html).not.toContain('<img src=x');
     expect(html).toContain('&lt;img src=x');
   });
@@ -213,7 +213,6 @@ describe('dashboard rendering', () => {
   it('splits the rows into a green column and a red one', () => {
     const html = renderDashboard(
       [row({ status: 'AVAILABLE' }), row({ size: 'Small', status: 'SOLD_OUT' })],
-      [],
       {}
     );
     expect(html).toContain('Còn hàng');
@@ -231,7 +230,7 @@ describe('dashboard rendering', () => {
   });
 
   it('copies exactly the text the line displays', () => {
-    const html = renderDashboard([row()], [], {});
+    const html = renderDashboard([row()], {});
     // The button carries the same string the anchor renders; if these drift,
     // the reader pastes something other than what they read.
     expect(html).toContain('data-copy="Box Logo Tee — Black — Large"');
@@ -249,19 +248,13 @@ describe('dashboard rendering', () => {
   it('never files an UNKNOWN row under sold out', () => {
     // A failed check is not a sell-out. Colouring it red would tell the reader
     // an item is gone when nobody established that.
-    const html = renderDashboard([row({ status: 'UNKNOWN' })], [], {});
+    const html = renderDashboard([row({ status: 'UNKNOWN' })], {});
     expect(html).toContain('chưa kiểm tra được');
   });
 
   it('marks a restocked line so the awaited event stands out', () => {
-    const html = renderDashboard([row({ latest_event: 'RESTOCK' })], [], {});
+    const html = renderDashboard([row({ latest_event: 'RESTOCK' })], {});
     expect(html).toContain('RESTOCK</span>');
-  });
-
-  it('carries active filters into the export links', () => {
-    const html = renderDashboard([row()], ['tops'], { status: 'AVAILABLE' });
-    expect(html).toContain('/export?format=csv&status=AVAILABLE');
-    expect(html).toContain('/export?format=xlsx&status=AVAILABLE');
   });
 });
 
@@ -311,7 +304,7 @@ describe('the dashboard groups against the watch list', () => {
   const stale = row({ previous_status: 'SOLD_OUT', status: 'SOLD_OUT', name: 'Long Gone Tee' });
 
   it('puts each row in the group its watch-list membership dictates', () => {
-    const html = renderDashboard([still, gone, fresh], [], {});
+    const html = renderDashboard([still, gone, fresh], {});
     const green = html.slice(html.indexOf('col ok'), html.indexOf('col out'));
     const red = html.slice(html.indexOf('col out'), html.indexOf('col new'));
     const blue = html.slice(html.indexOf('col new'));
@@ -324,28 +317,28 @@ describe('the dashboard groups against the watch list', () => {
   it('shows nothing that was already gone before this scan', () => {
     // Sold out then, sold out now: nothing to act on. Several hundred of these
     // are what buried the rows that mattered.
-    const html = renderDashboard([still, stale], [], {});
+    const html = renderDashboard([still, stale], {});
     expect(html).not.toContain('Long Gone Tee');
   });
 
   it('says so, and empties the red column, when nothing moved', () => {
-    const html = renderDashboard([still], [], {});
+    const html = renderDashboard([still], {});
     expect(html).toContain('không có thay đổi nào');
   });
 
   it('stays quiet about that when something DID move', () => {
-    expect(renderDashboard([still, gone], [], {})).not.toContain('không có thay đổi nào');
+    expect(renderDashboard([still, gone], {})).not.toContain('không có thay đổi nào');
   });
 
   it('counts a new arrival as a change too', () => {
     // Only checking the sold-out half would call a scan that found thirty new
     // products "no changes".
-    expect(renderDashboard([still, fresh], [], {})).not.toContain('không có thay đổi nào');
+    expect(renderDashboard([still, fresh], {})).not.toContain('không có thay đổi nào');
   });
 
   it('never files an unreadable size under sold out', () => {
     const unread = row({ previous_status: 'AVAILABLE', status: 'UNKNOWN', name: 'Unread Item' });
-    const html = renderDashboard([still, unread], [], {});
+    const html = renderDashboard([still, unread], {});
     const red = html.slice(html.indexOf('col out'), html.indexOf('col new'));
     expect(red).not.toContain('Unread Item');
     expect(html).toContain('chưa kiểm tra được');
@@ -360,7 +353,7 @@ describe('the three controls in the toolbar', () => {
     // Three separate controls. The initialise button used to be the scan
     // button wearing a different label, which meant it vanished after the
     // first run and a deliberate re-seed became impossible.
-    const html = renderDashboard([tracked], [], {});
+    const html = renderDashboard([tracked], {});
     expect(html).toContain('id="scan-btn"');
     expect(html).toContain('id="init-btn"');
     expect(html).toContain('href="/changes"');
@@ -369,27 +362,27 @@ describe('the three controls in the toolbar', () => {
   });
 
   it('keeps all three before any list exists', () => {
-    const html = renderDashboard([untracked], [], {});
+    const html = renderDashboard([untracked], {});
     expect(html).toContain('id="scan-btn"');
     expect(html).toContain('id="init-btn"');
     expect(html).toContain('href="/changes"');
   });
 
   it('highlights initialise only while there is no list to lose', () => {
-    expect(renderDashboard([untracked], [], {})).toContain('init wanted');
-    expect(renderDashboard([tracked], [], {})).not.toContain('init wanted');
+    expect(renderDashboard([untracked], {})).toContain('init wanted');
+    expect(renderDashboard([tracked], {})).not.toContain('init wanted');
   });
 
   it('marks whether a list already exists, which is what gates the warning', () => {
     // The confirm fires only when re-seeding would discard a real baseline.
-    expect(renderDashboard([tracked], [], {})).toContain('data-has-list="1"');
-    expect(renderDashboard([untracked], [], {})).toContain('data-has-list=""');
+    expect(renderDashboard([tracked], {})).toContain('data-has-list="1"');
+    expect(renderDashboard([untracked], {})).toContain('data-has-list=""');
   });
 
   it('does not claim "nothing changed" before a list exists', () => {
     // With no baseline every row is new, so the groups are not empty -- but
     // saying "nothing changed" against a list nobody made would be nonsense.
-    const html = renderDashboard([row({ previous_status: null, status: 'SOLD_OUT' })], [], {});
+    const html = renderDashboard([row({ previous_status: null, status: 'SOLD_OUT' })], {});
     expect(html).not.toContain('không có thay đổi nào');
   });
 });
@@ -399,7 +392,27 @@ describe('getting to the changes page', () => {
     // The post-scan banner links there too, but only when there were changes.
     // On a quiet day that leaves no way through.
     for (const previous_status of [null, 'AVAILABLE', 'SOLD_OUT']) {
-      expect(renderDashboard([row({ previous_status })], [], {})).toContain('href="/changes"');
+      expect(renderDashboard([row({ previous_status })], {})).toContain('href="/changes"');
     }
+  });
+});
+
+describe('the toolbar holds three controls and nothing else', () => {
+  const html = renderDashboard([row({ previous_status: 'AVAILABLE' })], {});
+  const toolbar = html.slice(html.indexOf('<nav class="toolbar">'), html.indexOf('</nav>'));
+
+  it('keeps scan, initialise and changes', () => {
+    expect(toolbar).toContain('id="scan-btn"');
+    expect(toolbar).toContain('id="init-btn"');
+    expect(toolbar).toContain('href="/changes"');
+  });
+
+  it('carries no filters and no download links', () => {
+    // Removed at the customer's request. /export still answers, so the files
+    // are a URL away -- it is the buttons that are gone, not the capability.
+    expect(toolbar).not.toContain('<select');
+    expect(toolbar).not.toContain('/export');
+    expect(html).not.toContain('Tải CSV');
+    expect(html).not.toContain('Tải Excel');
   });
 });

@@ -78,13 +78,6 @@ export function buildLineText(row: DashboardRow): string {
   return [row.name, row.color, row.size].filter(Boolean).join(' — ');
 }
 
-const STATUSES = ['AVAILABLE', 'SOLD_OUT', 'UNKNOWN'];
-const EVENTS = ['RESTOCK', 'NEW_PRODUCT', 'NEW_VARIANT', 'PRICE_CHANGED', 'SOLD_OUT'];
-
-function option(value: string, selected: string | undefined, label?: string): string {
-  const isSelected = selected === value ? ' selected' : '';
-  return `<option value="${escapeHtml(value)}"${isSelected}>${escapeHtml(label ?? value)}</option>`;
-}
 
 export interface DashboardFilters {
   status?: string;
@@ -145,15 +138,8 @@ function renderColumn(
 
 export function renderDashboard(
   rows: DashboardRow[],
-  categories: string[],
   filters: DashboardFilters
 ): string {
-  const query = new URLSearchParams();
-  if (filters.status) query.set('status', filters.status);
-  if (filters.event) query.set('event', filters.event);
-  if (filters.category) query.set('category', filters.category);
-  const exportQuery = query.toString();
-
   // Three groups against the watch list, not two against current stock. See
   // core/watch-list-grouping.ts for what each one means and why a size that was
   // sold out before and is sold out now appears in none of them.
@@ -193,7 +179,7 @@ export function renderDashboard(
   header { padding:18px 22px; border-bottom:1px solid #e6e6e6; }
   h1 { margin:0; font-size:17px; }
   .sub { color:#777; font-size:12px; margin-top:3px; }
-  form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:14px 22px; border-bottom:1px solid #eee; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:14px 22px; border-bottom:1px solid #eee; }
   select, button, .btn { font:inherit; font-size:13px; padding:7px 11px; border:1px solid #d5d5d5; border-radius:7px; background:#fff; color:#111; }
   .btn { text-decoration:none; }
   .btn.primary { background:#111; color:#fff; border-color:#111; }
@@ -262,20 +248,7 @@ export function renderDashboard(
   <div class="sub">${rows.length} mục &middot; cập nhật ${escapeHtml(formatWhen(lastChecked))} (${escapeHtml(timeZoneLabel())}) &middot; mỗi màu là một sản phẩm riêng</div>
 </header>
 
-<form method="get">
-  <select name="category" aria-label="Danh mục">
-    <option value="">Tất cả danh mục</option>
-    ${categories.map((c) => option(c, filters.category)).join('')}
-  </select>
-  <select name="event" aria-label="Sự kiện">
-    <option value="">Mọi sự kiện</option>
-    ${EVENTS.map((e) => option(e, filters.event)).join('')}
-  </select>
-  <select name="status" aria-label="Trạng thái">
-    <option value="">Cả hai cột</option>
-    ${STATUSES.map((s) => option(s, filters.status)).join('')}
-  </select>
-  <button type="submit">Lọc</button>
+<nav class="toolbar">
   <button type="button" id="scan-btn" class="scan">Quét ngay</button>
   <!-- Its own control rather than a label the scan button borrows. The two do
        different things -- one measures against the list, the other replaces it
@@ -285,14 +258,9 @@ export function renderDashboard(
   <button type="button" id="init-btn" class="btn init${
     needsInit || noData ? ' wanted' : ''
   }" data-has-list="${needsInit || noData ? '' : '1'}">Khởi tạo danh sách</button>
-  <span id="scan-status" class="scan-status"></span>
-  <!-- Always present, not only after a scan that found something. The banner's
-       "Xem chi tiết" link appears only when there were changes, so without this
-       there is no way to reach the history from here on a quiet day. -->
   <a class="btn" href="/changes">Xem thay đổi</a>
-  <a class="btn" href="/export?format=csv${exportQuery ? '&' + exportQuery : ''}">Tải CSV</a>
-  <a class="btn primary" href="/export?format=xlsx${exportQuery ? '&' + exportQuery : ''}">Tải Excel</a>
-</form>
+  <span id="scan-status" class="scan-status"></span>
+</nav>
 
 <div id="scan-result"></div>
 

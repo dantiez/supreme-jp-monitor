@@ -67,7 +67,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --init` | Seed the watch list from this scan |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 127 tests |
+| `npm test` | Vitest: 128 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -173,6 +173,8 @@ The watch list is the set of sizes that were AVAILABLE at the previous scan, car
 **The baseline is stored, not recomputed.** `status` is overwritten as the scan walks the catalogue, so by the time anyone loads the page the "before" side is gone. Storing it means the grouping survives a reload, a restart, and a second reader.
 
 **The baseline rolls.** Scan N is compared with scan N-1, so a size that sells out and is not dealt with immediately drops out of 🔴 at the next scan. The customer chose this over a baseline fixed at initialisation, having been shown that exact cost.
+
+**The toolbar holds three controls and nothing else** -- scan, initialise, changes. The category/event/status filters and the CSV and XLSX download buttons were removed at the customer's request. `/export` still answers, so the files are a URL away and the query parameters still work; it is the buttons that went, not the capability.
 
 **Three controls, not two with a shape-shifting label.** `Quét ngay` measures against the list; `Khởi tạo danh sách` replaces it; `Xem thay đổi` opens the history. The initialise action used to be the scan button wearing a different name, which meant it disappeared after the first run and a deliberate re-seed became impossible. It is now always present, highlighted only while no list exists, and asks for confirmation before discarding a real baseline -- re-seeding drops the red items still waiting to be acted on.
 

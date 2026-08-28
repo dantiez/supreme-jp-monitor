@@ -377,10 +377,3 @@ export async function loadChangesForScan(scanId: number): Promise<ChangeRow[]> {
   return res.rows;
 }
 
-/** Distinct categories, for the dashboard filter. */
-export async function loadCategories(): Promise<string[]> {
-  const res = await query<{ category: string }>(
-    `SELECT DISTINCT category FROM supreme_monitor.products WHERE category IS NOT NULL ORDER BY category`
-  );
-  return res.rows.map((r) => r.category);
-}
