@@ -74,11 +74,17 @@ Mỗi dòng là **một màu, một size riêng**. Supreme coi mỗi màu là m�
 
 ---
 
-## Lần đầu tiên: nút **Khởi tạo danh sách**
+## Ba nút trên thanh công cụ
 
-Khi chưa có danh sách theo dõi, nút xanh sẽ ghi **"Khởi tạo danh sách"** thay vì "Quét ngay", kèm dòng giải thích ở trên.
+| Nút | Làm gì |
+|---|---|
+| **Quét ngay** | Quét lại và so với danh sách hiện có — dùng hằng ngày |
+| **Khởi tạo danh sách** | **Chốt lại** danh sách theo dõi bằng hàng đang còn |
+| **Xem thay đổi** | Mở trang lịch sử từng lần quét |
 
-Bấm một lần → nó quét và chốt toàn bộ hàng đang còn thành danh sách của bạn. Xong thì tất cả nằm ở cột 🟢, chưa có đỏ và chưa có xanh dương. Từ đó nút đổi thành "Quét ngay".
+**Lần đầu dùng** chưa có danh sách, nút "Khởi tạo danh sách" sẽ được tô viền xanh dương. Bấm một lần → quét và chốt toàn bộ hàng đang còn thành danh sách. Xong thì tất cả nằm ở cột 🟢.
+
+> ⚠️ **Sau đó đừng bấm "Khởi tạo danh sách" tuỳ tiện.** Nó chốt lại từ đầu, nên **các món đang ở cột đỏ sẽ biến mất mà bạn chưa kịp gỡ tin**. Chỉ bấm khi đã xử lý xong hết và muốn bắt đầu lại. Trang sẽ hỏi xác nhận trước.
 
 ---
 

@@ -228,6 +228,12 @@ export function renderDashboard(
   .empty { color:#999; font-size:13px; }
   .scan { background:#15803d; color:#fff; border-color:#15803d; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
   .scan:disabled { background:#9ccbaa; border-color:#9ccbaa; cursor:default; }
+  .init { cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
+  .init:disabled { color:#aaa; border-color:#e4e4e4; cursor:default; }
+  /* Highlighted only while no list exists -- the one moment it is the thing to
+     press. Never disabled, so a deliberate re-seed stays possible. */
+  .init.wanted { border-color:#2563eb; color:#1d4ed8; font-weight:600; }
+  .init .spin { border-color:rgba(0,0,0,.2); border-top-color:#333; }
   /* Turns for as long as the SERVER says it is scanning, so the motion tracks
      real work rather than an open request. */
   .spin { width:13px; height:13px; border:2px solid rgba(255,255,255,.45); border-top-color:#fff;
@@ -270,9 +276,15 @@ export function renderDashboard(
     ${STATUSES.map((s) => option(s, filters.status)).join('')}
   </select>
   <button type="submit">Lọc</button>
-  <button type="button" id="scan-btn" class="scan" data-init="${needsInit || noData ? '1' : ''}">${
-    needsInit || noData ? 'Khởi tạo danh sách' : 'Quét ngay'
-  }</button>
+  <button type="button" id="scan-btn" class="scan">Quét ngay</button>
+  <!-- Its own control rather than a label the scan button borrows. The two do
+       different things -- one measures against the list, the other replaces it
+       -- and a button that silently changes meaning is the harder one to trust.
+       The highlight class only draws the eye; it stays clickable either way,
+       because re-seeding after acting on a batch is a real thing to want. -->
+  <button type="button" id="init-btn" class="btn init${
+    needsInit || noData ? ' wanted' : ''
+  }" data-has-list="${needsInit || noData ? '' : '1'}">Khởi tạo danh sách</button>
   <span id="scan-status" class="scan-status"></span>
   <!-- Always present, not only after a scan that found something. The banner's
        "Xem chi tiết" link appears only when there were changes, so without this
@@ -309,8 +321,16 @@ ${
   // reload, a second tab, and this page being closed and reopened mid-scan.
   (function () {
     var btn = document.getElementById('scan-btn');
+    var initBtn = document.getElementById('init-btn');
     var out = document.getElementById('scan-status');
     if (!btn || !out) return;
+
+    var buttons = [btn, initBtn];
+    // Captured before anything is overwritten: setBusy puts each label back
+    // where it found it, so neither button can end up wearing the other's name.
+    var labels = new Map();
+    buttons.forEach(function (b) { if (b) labels.set(b, b.textContent); });
+    var active = btn;
     var timer = null;
 
     var banner = document.getElementById('scan-result');
@@ -375,8 +395,8 @@ ${
     var shownFinish = null;
 
     function render(state) {
-      btn.disabled = state.running;
-      setBusy(state.running);
+      buttons.forEach(function (b) { if (b) b.disabled = state.running; });
+      setBusy(active, state.running);
       out.textContent = describe(state);
 
       // Only announce a result once. Polling repeats the same finished state,
@@ -385,64 +405,81 @@ ${
         shownFinish = state.last.finishedAt;
         showResult(state.last);
       }
-      // Once an initialising scan finishes there IS a list, so the button must
-      // stop offering to create one. Done here rather than by reloading, which
-      // would yank the page from under someone mid-copy.
-      if (!state.running && state.last && btn.getAttribute('data-init') === '1') {
-        btn.setAttribute('data-init', '');
-        idleLabel = 'Quét ngay';
-        if (!btn.disabled) btn.innerHTML = idleLabel;
-      }
       if (!state.running && timer) { clearInterval(timer); timer = null; }
+
+      // Once any scan has run there is a list, so stop shouting about the
+      // initialise button. It stays clickable -- only the highlight goes.
+      if (!state.running && state.last && initBtn) {
+        initBtn.classList.remove('wanted');
+        initBtn.setAttribute('data-has-list', '1');
+      }
     }
 
     function poll() {
       fetch('/api/scan/status').then(function (r) { return r.json(); }).then(render).catch(function () {});
     }
 
-    // innerHTML rather than textContent: the label carries the spinner element.
-    // Both states are literals defined here, so there is nothing to escape.
-    var idleLabel = btn.textContent;
-
-    function setBusy(busy) {
-      btn.innerHTML = busy
+    // Spinner on the button that was actually pressed; the other only greys
+    // out. Turning both would say two scans are running when one is.
+    function setBusy(button, busy) {
+      if (!button) return;
+      button.innerHTML = busy
         ? '<span class="spin" aria-hidden="true"></span>Đang quét…'
-        // Back to whatever the server rendered. Hard-coding "Quét ngay" here
-        // renamed the initialise button the moment the first scan finished,
-        // while data-init still said it would initialise.
-        : idleLabel;
+        : labels.get(button);
       // Read aloud by screen readers, which cannot see a turning circle.
-      btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+      button.setAttribute('aria-busy', busy ? 'true' : 'false');
     }
 
-    btn.addEventListener('click', function () {
-      btn.disabled = true;
+    function start(button, initialise) {
+      buttons.forEach(function (b) { if (b) b.disabled = true; });
+      active = button;
       // Immediately, without waiting for the first poll: a button that sits
       // still for three seconds after a click reads as a click that missed.
-      setBusy(true);
+      setBusy(button, true);
       out.textContent = 'Đang bắt đầu…';
-      // The initialise flag rides on the button that was actually rendered, so
-      // a page loaded before a list existed cannot start an ordinary scan and
-      // report every product in the shop as new.
+
       fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initialise: btn.getAttribute('data-init') === '1' })
+        body: JSON.stringify({ initialise: initialise })
       })
         .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
         .then(function (r) {
           if (r.status === 409) out.textContent = 'Đã có một lần quét đang chạy.';
-          render(r.body.state);
+          if (r.body && r.body.state) render(r.body.state);
           if (!timer) timer = setInterval(poll, 3000);
         })
         .catch(function () {
           // Stop the spinner too, or it turns forever over a scan that never
           // started -- the one thing worse than no feedback is false feedback.
-          btn.disabled = false;
-          setBusy(false);
+          buttons.forEach(function (b) { if (b) b.disabled = false; });
+          setBusy(button, false);
           out.textContent = 'Không gọi được máy chủ.';
         });
-    });
+    }
+
+    btn.addEventListener('click', function () { start(btn, false); });
+
+    if (initBtn) {
+      initBtn.addEventListener('click', function () {
+        // Re-seeding throws away the comparison baseline: everything in stock
+        // becomes green and the red items still waiting to be pulled disappear
+        // without being dealt with. Worth asking about. The first run, where
+        // there is nothing to lose, is not.
+        if (
+          initBtn.getAttribute('data-has-list') === '1' &&
+          !window.confirm(
+            'Việc này chốt lại danh sách theo dõi bằng hàng đang còn.' +
+              String.fromCharCode(10, 10) +
+              'Các món đang ở cột ĐỎ sẽ biến mất khỏi đó mà chưa được xử lý.' +
+              String.fromCharCode(10, 10) + 'Tiếp tục?'
+          )
+        ) {
+          return;
+        }
+        start(initBtn, true);
+      });
+    }
 
     // A scan may already be running when the page loads.
     poll();
