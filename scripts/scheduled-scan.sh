@@ -1,10 +1,15 @@
 #!/bin/bash
-# One scan, run by launchd on the machine that can reach the Japanese store.
+# Serves scan requests, and refreshes stale data, on the machine that can reach
+# the Japanese store.
 #
 # WHY THIS EXISTS: supreme.com picks a storefront from the caller's IP, and each
 # one renames every product. The hosted dashboard is in Singapore and is served
-# the SGD store, so it cannot scan -- its scan buttons are hidden and the scan
-# would refuse anyway. The data it shows is refreshed from here instead.
+# the SGD store, so it cannot scan. Its "Quét ngay" button records the ask in
+# the shared database instead, and this picks it up.
+#
+# Run every minute by launchd. It exits immediately when there is nothing to do,
+# so the cost of checking often is close to nothing -- and checking often is
+# what makes the button on the other machine feel like a button.
 #
 # launchd gives a job almost no environment: no PATH beyond the system default,
 # no shell profile, no nvm. Every path below is absolute for that reason -- a
@@ -30,10 +35,10 @@ cd "$PROJECT_DIR" || {
   exit 1
 }
 
-echo "=== $(date '+%F %T') bắt đầu quét ===" >> "$LOG"
-"$NODE_BIN_DIR/npm" run scan >> "$LOG" 2>&1
+echo "--- $(date '+%F %T') kiểm tra ---" >> "$LOG"
+"$NODE_BIN_DIR/npm" run worker -- --or-schedule >> "$LOG" 2>&1
 STATUS=$?
-echo "=== $(date '+%F %T') kết thúc, mã thoát $STATUS ===" >> "$LOG"
+[ $STATUS -ne 0 ] && echo "!!! $(date '+%F %T') LỖI, mã thoát $STATUS" >> "$LOG"
 
 # A non-zero exit is usually the wrong-storefront guard, which means this
 # machine has moved or is behind a VPN. Left in the log rather than swallowed.

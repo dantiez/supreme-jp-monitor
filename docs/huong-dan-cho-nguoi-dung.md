@@ -10,9 +10,9 @@ Một trang web riêng, cho bạn xem **toàn bộ hàng trên jp.supreme.com** 
 
 Dùng để canh hàng bạn đã đăng bán lại: món nào vừa hết thì gỡ tin, món nào có lại thì đăng tiếp.
 
-> ### Nó tự cập nhật, hai tiếng một lần
+> ### Bấm **Quét ngay** bất cứ lúc nào
 >
-> Bạn không phải bấm gì cả. Mở link ra là thấy dữ liệu mới nhất.
+> Dữ liệu cũng tự làm mới hai tiếng một lần, nên mở ra là đã có sẵn.
 >
 > Nhưng nó **không canh liên tục**: món về hàng lúc 3 giờ rồi hết lúc 4 giờ, kẹt giữa hai lần quét, thì nó không biết. Nên **thấy tin là xử lý ngay**.
 
@@ -30,13 +30,18 @@ Nếu bạn để yên link một lúc lâu rồi mới mở, **trang sẽ chờ
 
 ---
 
-## Trang này chỉ để xem
+## Nút **Quét ngay**
 
-**Không có nút nào để quét.** Dữ liệu tự làm mới **hai tiếng một lần** từ một máy khác. Trên đầu trang có dòng *"cập nhật lúc..."* cho biết lần làm mới gần nhất.
+Bấm là xong. Nút sẽ báo *"Đã gửi yêu cầu, đang chờ máy quét…"*, rồi khoảng **2–3 phút** sau dữ liệu được làm mới.
 
-> **Vì sao không cho bấm?** Trang Supreme trả về **cửa hàng khác nhau tuỳ nơi gọi**. Máy chủ chạy trang này đặt ở Singapore nên nó nhận cửa hàng Singapore, không phải Nhật — quét từ đây sẽ ghi nhầm toàn bộ dữ liệu. Nên việc quét được giao cho máy vào đúng cửa hàng Nhật.
+> **Vì sao phải chờ?** Trang Supreme trả về **cửa hàng khác nhau tuỳ nơi gọi**. Máy chủ chạy trang web này ở Singapore nên nó nhận cửa hàng Singapore, không phải Nhật — quét từ đó sẽ ghi nhầm dữ liệu. Nên khi bạn bấm, yêu cầu được chuyển sang một máy khác vào đúng cửa hàng Nhật, máy đó quét rồi trả kết quả về đây.
 
----
+Bấm nhiều lần cũng chỉ chạy **một** lần quét, không sao cả.
+
+**Nếu thấy báo "Đã chờ 5 phút — máy quét có thể đang tắt"**: máy quét chưa bật. Báo người quản lý.
+
+Ngoài ra dữ liệu cũng **tự làm mới hai tiếng một lần**, không cần ai bấm.
+
 
 ## Ba cột
 
