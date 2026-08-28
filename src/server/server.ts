@@ -25,17 +25,6 @@ const PORT = Number(process.env.PORT ?? 3100);
 // like Render injects PORT and needs 0.0.0.0 to route traffic to the container.
 const HOST = process.env.HOST ?? '127.0.0.1';
 
-// Whether THIS instance may scan.
-//
-// supreme.com serves a storefront chosen from the caller's IP, and each one
-// renames every product, so a scan only means anything from a machine that
-// reaches the Japanese store. The hosted dashboard does not reach it: it exists
-// to be read by someone else, and the scanning runs where the store is.
-//
-// The scan already refuses a foreign storefront, so this is not what keeps the
-// data safe -- it is what stops a reader being handed buttons that can only
-// fail. Default on, because the machine that scans is the one running locally.
-const SCANNING_ENABLED = process.env.ALLOW_SCANNING !== 'false';
 
 // Guards every route, the scan trigger included -- an unprotected URL would let
 // a stranger start hundred-second scans against Supreme and the database, which
@@ -91,25 +80,6 @@ app.post('/api/scan', express.json(), (req, res) => {
   // Enforced at the route, not only by hiding the controls. A hidden button is
   // a suggestion: anyone can still POST, and a page cached from before the
   // setting changed still carries live ones.
-  // This instance cannot scan, but the person asking is sitting in front of it,
-  // not in front of the machine that can. So the ask is recorded and the worker
-  // on that machine picks it up. Answered 202 rather than 200: accepted, not
-  // done, which is exactly what happened.
-  if (!SCANNING_ENABLED) {
-    void repo
-      .requestScan()
-      .then((request) => {
-        res.status(202).json({ ok: true, queued: true, requestedAt: request.requested_at });
-      })
-      .catch((e: Error) => {
-        res.status(500).json({ ok: false, error: e.message });
-      });
-    return;
-  }
-
-  // Only ever true when the client says so explicitly. Defaulting to true on a
-  // missing body would reseed the watch list on an ordinary scan and wipe the
-  // baseline every change is measured against.
   const initialise = (req.body as { initialise?: unknown } | undefined)?.initialise === true;
   const result = startScan({ initialise });
   if (!result.started) {
@@ -120,33 +90,8 @@ app.post('/api/scan', express.json(), (req, res) => {
   res.status(202).json({ ok: true, state: getScanState() });
 });
 
-// Merges what this process knows with what the database knows.
-//
-// On the hosted dashboard the in-process state is always empty -- no scan ever
-// starts here -- so reporting it alone would say "nothing has ever run" while a
-// scan was in progress on another machine. Where this instance does scan, the
-// in-process state is the fresher of the two and wins.
-app.get('/api/scan/status', async (_req, res) => {
-  const local = getScanState();
-  if (local.running || SCANNING_ENABLED) {
-    res.json({ ...local, pendingSince: null });
-    return;
-  }
-
-  try {
-    const remote = await repo.loadRemoteScanState();
-    res.json({
-      running: remote.running,
-      startedAt: remote.startedAt,
-      finishedAt: remote.last?.finishedAt ?? null,
-      pendingSince: remote.pendingSince,
-      last: remote.last
-        ? { ...remote.last, startedAt: remote.startedAt ?? '', failed: 0, listingChanges: 0, error: null }
-        : null
-    });
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
-  }
+app.get('/api/scan/status', (_req, res) => {
+  res.json(getScanState());
 });
 
 app.get('/', async (req, res) => {
@@ -157,7 +102,7 @@ app.get('/', async (req, res) => {
     const rows = await repo.loadDashboardRows(filters);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(renderDashboard(rows, filters, { scanningEnabled: SCANNING_ENABLED }));
+    res.send(renderDashboard(rows, filters));
   } catch (e) {
     // Say what broke. A blank dashboard reads as "nothing is in stock".
     res.status(500).send(
@@ -263,10 +208,5 @@ app.listen(PORT, HOST, () => {
     process.env.DASHBOARD_PASSWORD
       ? '[auth] Password required.'
       : '[auth] No password -- loopback only.'
-  );
-  console.log(
-    SCANNING_ENABLED
-      ? '[scan] Scanning enabled on this instance.'
-      : '[scan] View only -- scanning happens elsewhere.'
   );
 });

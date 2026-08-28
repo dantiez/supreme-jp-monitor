@@ -13,8 +13,6 @@
 // because a queued scan would run against state the first one just changed.
 
 import { runScan, ScanSummary } from '../core/scan-runner.js';
-import { WrongStoreError } from '../core/expected-store.js';
-import * as repo from '../db/monitor-repository.js';
 
 export interface ScanState {
   running: boolean;
@@ -40,14 +38,6 @@ export interface ScanState {
      */
     byEvent: Record<string, number>;
     error: string | null;
-    /**
-     * The scan could not run HERE and was handed to the worker instead.
-     *
-     * Not an error: the reader's request is still going to be served, just by
-     * another machine. Reported separately so the page can say so rather than
-     * showing a failure for something that is on its way.
-     */
-    queued: boolean;
   } | null;
 }
 
@@ -90,29 +80,10 @@ export function startScan(options: { initialise?: boolean } = {}): StartResult {
     let summary: ScanSummary | null = null;
     let error: string | null = null;
 
-    let queued = false;
-
     try {
       summary = await runScan({ initialise: options.initialise === true });
     } catch (e) {
-      // This instance cannot reach the Japanese store -- which is a fact about
-      // where it is running, not a fault. Rather than handing the reader a
-      // failure, record the ask so the machine that CAN scan serves it.
-      //
-      // ALLOW_SCANNING=false does this up front and avoids the wasted attempt,
-      // but it has to be set, and a service created by hand rather than from
-      // render.yaml will not have it. Getting the configuration wrong should
-      // cost a few seconds, not the feature.
-      if (e instanceof WrongStoreError) {
-        try {
-          await repo.requestScan();
-          queued = true;
-        } catch (queueError) {
-          error = `${(e as Error).message} (không gửi được yêu cầu sang máy quét: ${(queueError as Error).message})`;
-        }
-      } else {
-        error = (e as Error).message;
-      }
+      error = (e as Error).message;
     } finally {
       const ended = Date.now();
       last = {
@@ -125,13 +96,11 @@ export function startScan(options: { initialise?: boolean } = {}): StartResult {
         changes: summary?.changes.length ?? 0,
         listingChanges: summary?.listingChanges.length ?? 0,
         byEvent: countByEvent(summary),
-        error,
-        queued
+        error
       };
       running = false;
       startedAt = null;
 
-      if (queued) console.log('[scan] wrong store here -- handed to the worker');
       if (error) console.error('[scan] on-demand scan failed:', error);
     }
   })();
