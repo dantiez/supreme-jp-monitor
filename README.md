@@ -136,12 +136,17 @@ The database is already shared by both sides, which is why this needs no proxy, 
 **Installing the worker (macOS):**
 
 ```bash
-cp scripts/com.supreme-jp-monitor.scan.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.supreme-jp-monitor.scan.plist
+./scripts/install-agent.sh
 tail -f ~/Library/Logs/supreme-jp-monitor/scan.log
 ```
 
-Every minute. That sounds like a lot for a job that scans every two hours, but the check exits in well under a second with nothing to do, and it is what makes the button on the other machine feel like a button. `scripts/scheduled-scan.sh` uses absolute paths throughout: launchd gives a job almost no environment, and a bare `npm` works when tested by hand and silently fails at 3am.
+**The repository must not live in `~/Downloads`, `~/Desktop` or `~/Documents`.** macOS protects those (TCC), and a launchd agent may not execute anything inside them without Full Disk Access. The way it fails is the worst kind: the agent installs, `launchctl list` shows it, and it simply never runs -- exit 126 and "Operation not permitted" in a log nobody thinks to open. The installer checks and refuses with instructions rather than letting that happen.
+
+**The plist is generated, not committed.** launchd expands neither `~` nor `$HOME` in `ProgramArguments`, so a checked-in plist hardcodes one machine's path and then keeps pointing at wherever the repository used to be. `scripts/scheduled-scan.sh` derives its own location for the same reason.
+
+**The installer proves the agent works before it claims to.** `RunAtLoad` means the first check has already happened by the time it reports, so it reads back the exit status instead of assuming.
+
+Every minute. That sounds like a lot for a job that scans every two hours, but the check exits in well under a second with nothing to do, and it is what makes the button on the other machine feel like a button. Absolute paths throughout: launchd gives a job almost no environment, and a bare `npm` works when tested by hand and silently fails at 3am.
 
 **One shot, not a daemon.** The worker checks once and exits. A long-lived loop would need its own supervision, restart story, and answer for a laptop that sleeps mid-wait; a process that exits has none of those, and the cost is up to a minute of latency on a job that takes two.
 

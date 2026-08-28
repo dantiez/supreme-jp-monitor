@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "tsx src/server/server.ts",
-    "worker": "tsx src/cli/scan-worker.ts"
+    "worker": "tsx src/cli/scan-worker.ts",
+    "install-agent": "./scripts/install-agent.sh"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
