@@ -136,9 +136,15 @@ function renderColumn(
 </section>`;
 }
 
+export interface DashboardMode {
+  /** False on an instance that cannot reach the Japanese store. */
+  scanningEnabled: boolean;
+}
+
 export function renderDashboard(
   rows: DashboardRow[],
-  filters: DashboardFilters
+  filters: DashboardFilters,
+  mode: DashboardMode = { scanningEnabled: true }
 ): string {
   // Three groups against the watch list, not two against current stock. See
   // core/watch-list-grouping.ts for what each one means and why a size that was
@@ -249,7 +255,9 @@ export function renderDashboard(
 </header>
 
 <nav class="toolbar">
-  <button type="button" id="scan-btn" class="scan">Quét ngay</button>
+  ${
+    mode.scanningEnabled
+      ? `<button type="button" id="scan-btn" class="scan">Quét ngay</button>
   <!-- Its own control rather than a label the scan button borrows. The two do
        different things -- one measures against the list, the other replaces it
        -- and a button that silently changes meaning is the harder one to trust.
@@ -257,7 +265,13 @@ export function renderDashboard(
        because re-seeding after acting on a batch is a real thing to want. -->
   <button type="button" id="init-btn" class="btn init${
     needsInit || noData ? ' wanted' : ''
-  }" data-has-list="${needsInit || noData ? '' : '1'}">Khởi tạo danh sách</button>
+  }" data-has-list="${needsInit || noData ? '' : '1'}">Khởi tạo danh sách</button>`
+      : // Both scan controls go, not just one: neither can work from here, and
+        // half a set is more confusing than none. What stays is where to look
+        // instead -- the header already carries the time of the last update,
+        // which is the question this replaces.
+        '<span class="scan-status">Dữ liệu được cập nhật tự động — trang này chỉ để xem.</span>'
+  }
   <a class="btn" href="/changes">Xem thay đổi</a>
   <span id="scan-status" class="scan-status"></span>
 </nav>
@@ -291,6 +305,8 @@ ${
     var btn = document.getElementById('scan-btn');
     var initBtn = document.getElementById('init-btn');
     var out = document.getElementById('scan-status');
+    // No scan button means this instance does not scan: nothing to poll for,
+    // and polling anyway would wake a sleeping free instance every 3 seconds.
     if (!btn || !out) return;
 
     var buttons = [btn, initBtn];

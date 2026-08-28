@@ -25,6 +25,18 @@ const PORT = Number(process.env.PORT ?? 3100);
 // like Render injects PORT and needs 0.0.0.0 to route traffic to the container.
 const HOST = process.env.HOST ?? '127.0.0.1';
 
+// Whether THIS instance may scan.
+//
+// supreme.com serves a storefront chosen from the caller's IP, and each one
+// renames every product, so a scan only means anything from a machine that
+// reaches the Japanese store. The hosted dashboard does not reach it: it exists
+// to be read by someone else, and the scanning runs where the store is.
+//
+// The scan already refuses a foreign storefront, so this is not what keeps the
+// data safe -- it is what stops a reader being handed buttons that can only
+// fail. Default on, because the machine that scans is the one running locally.
+const SCANNING_ENABLED = process.env.ALLOW_SCANNING !== 'false';
+
 // Guards every route, the scan trigger included -- an unprotected URL would let
 // a stranger start hundred-second scans against Supreme and the database, which
 // is a heavier gift than read access.
@@ -76,6 +88,17 @@ function readFilters(query: Record<string, unknown>) {
 // enters the history either, because no scan ran between those moments. That
 // was the customer's call, made knowingly.
 app.post('/api/scan', express.json(), (req, res) => {
+  // Enforced at the route, not only by hiding the controls. A hidden button is
+  // a suggestion: anyone can still POST, and a page cached from before the
+  // setting changed still carries live ones.
+  if (!SCANNING_ENABLED) {
+    res.status(403).json({
+      ok: false,
+      error: 'Máy chủ này chỉ để xem. Việc quét chạy trên máy khác.'
+    });
+    return;
+  }
+
   // Only ever true when the client says so explicitly. Defaulting to true on a
   // missing body would reseed the watch list on an ordinary scan and wipe the
   // baseline every change is measured against.
@@ -101,7 +124,7 @@ app.get('/', async (req, res) => {
     const rows = await repo.loadDashboardRows(filters);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(renderDashboard(rows, filters));
+    res.send(renderDashboard(rows, filters, { scanningEnabled: SCANNING_ENABLED }));
   } catch (e) {
     // Say what broke. A blank dashboard reads as "nothing is in stock".
     res.status(500).send(
@@ -207,5 +230,10 @@ app.listen(PORT, HOST, () => {
     process.env.DASHBOARD_PASSWORD
       ? '[auth] Password required.'
       : '[auth] No password -- loopback only.'
+  );
+  console.log(
+    SCANNING_ENABLED
+      ? '[scan] Scanning enabled on this instance.'
+      : '[scan] View only -- scanning happens elsewhere.'
   );
 });

@@ -10,11 +10,11 @@ Một trang web riêng, cho bạn xem **toàn bộ hàng trên jp.supreme.com** 
 
 Dùng để canh hàng bạn đã đăng bán lại: món nào vừa hết thì gỡ tin, món nào có lại thì đăng tiếp.
 
-> ### ⚠️ Nó KHÔNG tự chạy
+> ### Nó tự cập nhật, hai tiếng một lần
 >
-> Chỉ khi bạn bấm nút thì nó mới đi xem. Bạn không bấm thì không có gì được kiểm tra.
+> Bạn không phải bấm gì cả. Mở link ra là thấy dữ liệu mới nhất.
 >
-> Lúc bạn đang ngủ mà có món về hàng rồi lại hết, nó sẽ **không** biết. Đây là điểm khác so với trước đây.
+> Nhưng nó **không canh liên tục**: món về hàng lúc 3 giờ rồi hết lúc 4 giờ, kẹt giữa hai lần quét, thì nó không biết. Nên **thấy tin là xử lý ngay**.
 
 ---
 
@@ -30,36 +30,22 @@ Nếu bạn để yên link một lúc lâu rồi mới mở, **trang sẽ chờ
 
 ---
 
-## Dùng hằng ngày — 3 bước
+## Trang này chỉ để xem
 
-### Bước 1 — bấm nút xanh **Quét ngay**
+**Không có nút nào để quét.** Dữ liệu tự làm mới **hai tiếng một lần** từ một máy khác. Trên đầu trang có dòng *"cập nhật lúc..."* cho biết lần làm mới gần nhất.
 
-*(Lần đầu tiên nút sẽ ghi "Khởi tạo danh sách" — xem mục dưới.)*
+> **Vì sao không cho bấm?** Trang Supreme trả về **cửa hàng khác nhau tuỳ nơi gọi**. Máy chủ chạy trang này đặt ở Singapore nên nó nhận cửa hàng Singapore, không phải Nhật — quét từ đây sẽ ghi nhầm toàn bộ dữ liệu. Nên việc quét được giao cho máy vào đúng cửa hàng Nhật.
 
-Nút đổi thành **Đang quét…** kèm một **vòng tròn xoay**. Vòng tròn còn xoay là nó vẫn đang làm.
+---
 
-**Mất khoảng 2 phút.** Cứ để đấy. Chuyển tab khác rồi quay lại cũng được; đóng luôn trang cũng không sao — mở lại vẫn thấy nó đang chạy.
-
-### Bước 2 — đọc dòng kết quả
-
-Quét xong sẽ hiện một dòng báo:
-
-| Dòng báo | Nghĩa là | Bạn làm gì |
-|---|---|---|
-| *không có gì thay đổi so với lần trước* | Y hệt lần trước | Xong, nghỉ |
-| *Mất hàng: 4 vừa hết hàng* | 4 món vừa hết | Đi gỡ tin đang bán |
-| *Thêm hàng: 2 có hàng lại* | 2 món về hàng | Đăng bán được |
-
-Bấm **Xem chi tiết** để biết chính xác món nào.
-
-### Bước 3 — ba cột
+## Ba cột
 
 | 🟢 **Còn hàng** | 🔴 **Hết hàng** | 🔵 **Sản phẩm mới** |
 |---|---|---|
 | Có trong danh sách, vẫn còn bán | Có trong danh sách, đã hết | Chưa có trong danh sách, đang bán |
 | Không phải làm gì | **Đi gỡ tin đang bán** | Có thể đăng bán thêm |
 
-**"Danh sách" ở đây là gì?** Là toàn bộ hàng đang còn ở **lần quét ngay trước**. Lần đầu bạn bấm "Khởi tạo danh sách" thì nó được chốt; mỗi lần quét sau nó tự cập nhật thành hàng còn của lần vừa quét.
+**"Danh sách" là gì?** Là toàn bộ hàng đang còn ở **lần quét ngay trước**. Mỗi lần quét nó tự cập nhật thành hàng còn của lần vừa quét.
 
 > ⚠️ **Món đỏ chỉ hiện đúng một lần.** Nếu lần này có 4 món sang đỏ mà bạn chưa kịp gỡ tin, lần quét sau chúng sẽ không còn ở cột đỏ nữa — vì so với lần quét gần nhất thì chúng đã hết sẵn rồi. **Thấy đỏ là xử lý ngay.**
 
@@ -71,20 +57,6 @@ Mỗi dòng là **một màu, một size riêng**. Supreme coi mỗi màu là m�
 - Bấm **Copy** → chép tên món để dán đi chỗ khác
 
 **Nếu không có món đỏ và không có món xanh dương**, cột đỏ chỉ hiện một dòng *"Lần quét gần nhất: không có thay đổi nào."*
-
----
-
-## Ba nút trên thanh công cụ
-
-| Nút | Làm gì |
-|---|---|
-| **Quét ngay** | Quét lại và so với danh sách hiện có — dùng hằng ngày |
-| **Khởi tạo danh sách** | **Chốt lại** danh sách theo dõi bằng hàng đang còn |
-| **Xem thay đổi** | Mở trang lịch sử từng lần quét |
-
-**Lần đầu dùng** chưa có danh sách, nút "Khởi tạo danh sách" sẽ được tô viền xanh dương. Bấm một lần → quét và chốt toàn bộ hàng đang còn thành danh sách. Xong thì tất cả nằm ở cột 🟢.
-
-> ⚠️ **Sau đó đừng bấm "Khởi tạo danh sách" tuỳ tiện.** Nó chốt lại từ đầu, nên **các món đang ở cột đỏ sẽ biến mất mà bạn chưa kịp gỡ tin**. Chỉ bấm khi đã xử lý xong hết và muốn bắt đầu lại. Trang sẽ hỏi xác nhận trước.
 
 ---
 
@@ -105,7 +77,7 @@ Có ô chọn ở trên để xem lại các lần quét cũ.
 
 ## Tin Discord
 
-Mỗi lần **có người bấm quét** và tìm thấy thay đổi, bot nhắn vào channel Discord. Không ai bấm thì không có tin.
+Mỗi lần quét tự động mà tìm thấy thay đổi, bot nhắn vào channel Discord. Không có thay đổi thì không có tin.
 
 Thứ tự ưu tiên trong tin: **về hàng lại** → lên lại sàn → hàng mới → size mới → đổi giá → vừa hết hàng → gỡ khỏi sàn.
 
@@ -134,7 +106,7 @@ Orange | Size Large | ¥85,800                ← màu | size | giá
 Không sao. Nó báo "Đã có một lần quét đang chạy" và bỏ qua lần bấm thứ hai.
 
 **Hai người cùng mở link được không?**
-Được, cùng nhìn một dữ liệu. Một người bấm quét thì người kia cũng thấy nó đang chạy.
+Được, cùng nhìn một dữ liệu.
 
 **Có món ghi "chưa kiểm tra được" thì sao?**
 Lúc quét bị lỗi mạng với riêng món đó. Nó **không** bị xếp vào hết hàng — vì chưa ai xác nhận điều đó. Quét lại lần sau thường là hết.
@@ -142,7 +114,7 @@ Lúc quét bị lỗi mạng với riêng món đó. Nó **không** bị xếp v
 **Giờ hiển thị là giờ nào?**
 Giờ Nhật (GMT+9), ghi rõ trên đầu trang.
 
-**Đừng chia link cho người khác.** Ai có link và mật khẩu là xem được tất cả, tải được file, và bấm quét được.
+**Đừng chia link cho người khác.** Ai có link và mật khẩu là xem được tất cả.
 
 ---
 
@@ -152,6 +124,6 @@ Giờ Nhật (GMT+9), ghi rõ trên đầu trang.
 |---|---|
 | Trang quay mãi lúc mới mở | Đợi 1 phút, máy chủ đang khởi động lại |
 | Hỏi mật khẩu lại | Gõ lại, trình duyệt quên sau khi đóng |
-| "Không gọi được máy chủ" | Tải lại trang rồi bấm quét lại |
+| Số liệu cũ hơn 3 tiếng | Máy quét có thể đang tắt — báo người quản lý |
 | Vòng tròn xoay quá 5 phút | Tải lại trang; vẫn vậy thì báo người quản lý |
 | Số liệu y hệt lần trước | Đúng rồi — không có gì đổi thật |
