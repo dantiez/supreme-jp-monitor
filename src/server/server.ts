@@ -75,8 +75,12 @@ function readFilters(query: Record<string, unknown>) {
 // size that returns at 03:00 and sells out by 05:00 is never seen, and never
 // enters the history either, because no scan ran between those moments. That
 // was the customer's call, made knowingly.
-app.post('/api/scan', express.json(), (_req, res) => {
-  const result = startScan();
+app.post('/api/scan', express.json(), (req, res) => {
+  // Only ever true when the client says so explicitly. Defaulting to true on a
+  // missing body would reseed the watch list on an ordinary scan and wipe the
+  // baseline every change is measured against.
+  const initialise = (req.body as { initialise?: unknown } | undefined)?.initialise === true;
+  const result = startScan({ initialise });
   if (!result.started) {
     // Refused, not queued: a queued scan would run against state the first one
     // is still writing, and report its own predecessor's work as changes.
@@ -97,20 +101,8 @@ app.get('/', async (req, res) => {
       repo.loadCategories()
     ]);
 
-    // Taken from the in-process scan first: it is the run the reader just
-    // triggered. Falling back to the stored history covers a fresh server that
-    // has not scanned yet but has scans behind it.
-    const state = getScanState();
-    let lastScanChanges: number | null = state.last
-      ? state.last.changes + state.last.listingChanges
-      : null;
-    if (lastScanChanges === null) {
-      const [recent] = await repo.loadRecentScans(1);
-      lastScanChanges = recent ? recent.changes_detected : null;
-    }
-
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(renderDashboard(rows, categories, filters, { lastScanChanges }));
+    res.send(renderDashboard(rows, categories, filters));
   } catch (e) {
     // Say what broke. A blank dashboard reads as "nothing is in stock".
     res.status(500).send(
@@ -191,6 +183,21 @@ app.get('/export', async (req, res) => {
     res.status(500).json({ error: (e as Error).message });
   }
 });
+
+// Apply the schema at boot, not only when a scan runs.
+//
+// Every read route queries columns the migrations add. On a fresh deploy the
+// dashboard is the FIRST thing anyone opens -- before any scan -- and without
+// this it answers 500 "column does not exist" to the person the link was just
+// handed to.
+//
+// Failure is logged, not fatal: the routes report the problem themselves, and
+// dying here would take down /healthz too and make the platform report the
+// service as broken rather than as up-with-a-bad-database.
+repo
+  .ensureReady()
+  .then(() => console.log('[db] schema ready'))
+  .catch((e) => console.error('[db] schema could not be applied:', (e as Error).message));
 
 app.listen(PORT, HOST, () => {
   console.log(`Supreme JP monitor dashboard on http://${HOST}:${PORT}`);

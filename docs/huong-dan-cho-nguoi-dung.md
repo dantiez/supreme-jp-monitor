@@ -34,6 +34,8 @@ Nếu bạn để yên link một lúc lâu rồi mới mở, **trang sẽ chờ
 
 ### Bước 1 — bấm nút xanh **Quét ngay**
 
+*(Lần đầu tiên nút sẽ ghi "Khởi tạo danh sách" — xem mục dưới.)*
+
 Nút đổi thành **Đang quét…** kèm một **vòng tròn xoay**. Vòng tròn còn xoay là nó vẫn đang làm.
 
 **Mất khoảng 2 phút.** Cứ để đấy. Chuyển tab khác rồi quay lại cũng được; đóng luôn trang cũng không sao — mở lại vẫn thấy nó đang chạy.
@@ -50,18 +52,33 @@ Quét xong sẽ hiện một dòng báo:
 
 Bấm **Xem chi tiết** để biết chính xác món nào.
 
-### Bước 3 — hai cột
+### Bước 3 — ba cột
 
-| Cột xanh — **CÒN HÀNG** | Cột đỏ — **HẾT HÀNG** |
-|---|---|
-| Đang mua được | Không mua được |
+| 🟢 **Còn hàng** | 🔴 **Hết hàng** | 🔵 **Sản phẩm mới** |
+|---|---|---|
+| Có trong danh sách, vẫn còn bán | Có trong danh sách, đã hết | Chưa có trong danh sách, đang bán |
+| Không phải làm gì | **Đi gỡ tin đang bán** | Có thể đăng bán thêm |
+
+**"Danh sách" ở đây là gì?** Là toàn bộ hàng đang còn ở **lần quét ngay trước**. Lần đầu bạn bấm "Khởi tạo danh sách" thì nó được chốt; mỗi lần quét sau nó tự cập nhật thành hàng còn của lần vừa quét.
+
+> ⚠️ **Món đỏ chỉ hiện đúng một lần.** Nếu lần này có 4 món sang đỏ mà bạn chưa kịp gỡ tin, lần quét sau chúng sẽ không còn ở cột đỏ nữa — vì so với lần quét gần nhất thì chúng đã hết sẵn rồi. **Thấy đỏ là xử lý ngay.**
+
+Món đã hết từ trước và giờ vẫn hết thì **không hiện ở đâu cả** — không có gì để làm với chúng.
 
 Mỗi dòng là **một màu, một size riêng**. Supreme coi mỗi màu là một sản phẩm khác nhau, nên `Box Logo — Black — M` và `Box Logo — White — M` là hai dòng khác nhau.
 
 - Bấm vào tên → sang thẳng trang Supreme
 - Bấm **Copy** → chép tên món để dán đi chỗ khác
 
-**Nếu lần quét vừa rồi không có gì đổi**, cột đỏ không liệt kê nữa, chỉ hiện một dòng *"Lần quét gần nhất: không có thay đổi nào."* — vì danh sách đó y hệt lần trước, bày ra chỉ tổ rối mắt.
+**Nếu không có món đỏ và không có món xanh dương**, cột đỏ chỉ hiện một dòng *"Lần quét gần nhất: không có thay đổi nào."*
+
+---
+
+## Lần đầu tiên: nút **Khởi tạo danh sách**
+
+Khi chưa có danh sách theo dõi, nút xanh sẽ ghi **"Khởi tạo danh sách"** thay vì "Quét ngay", kèm dòng giải thích ở trên.
+
+Bấm một lần → nó quét và chốt toàn bộ hàng đang còn thành danh sách của bạn. Xong thì tất cả nằm ở cột 🟢, chưa có đỏ và chưa có xanh dương. Từ đó nút đổi thành "Quét ngay".
 
 ---
 

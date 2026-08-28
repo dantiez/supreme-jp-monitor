@@ -44,6 +44,12 @@ export interface ScanOptions {
   maxProducts?: number;
   /** Skip the Discord post (used when backfilling an empty database). */
   notify?: boolean;
+  /**
+   * Seed the watch list from this scan rather than carrying the previous one
+   * forward. What is in stock now becomes the baseline, so it reads as "still
+   * in stock" instead of several hundred new products.
+   */
+  initialise?: boolean;
 }
 
 export interface ScanSummary {
@@ -132,6 +138,7 @@ async function readCatalogue(collection: string): Promise<DiscoveryResult> {
 export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
   const collections = options.collections ?? DEFAULT_COLLECTIONS;
   const shouldNotify = options.notify !== false;
+  const initialise = options.initialise === true;
 
   await repo.ensureReady();
   const runId = await repo.startScanRun();
@@ -190,7 +197,7 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanSummary> {
 
     for (const product of capped) {
       const changes = detectChanges(product, knownHandles, knownVariants);
-      await repo.saveProduct(product);
+      await repo.saveProduct(product, initialise);
       await repo.recordChanges(changes);
 
       summary.changes.push(...changes);

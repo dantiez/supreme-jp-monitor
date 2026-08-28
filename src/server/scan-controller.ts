@@ -69,7 +69,7 @@ export type StartResult =
  * rather than thrown, because nobody is awaiting this promise -- an unhandled
  * rejection here would take the whole server down over one failed scan.
  */
-export function startScan(): StartResult {
+export function startScan(options: { initialise?: boolean } = {}): StartResult {
   if (running) return { started: false, reason: 'already-running' };
 
   running = true;
@@ -81,7 +81,7 @@ export function startScan(): StartResult {
     let error: string | null = null;
 
     try {
-      summary = await runScan();
+      summary = await runScan({ initialise: options.initialise === true });
     } catch (e) {
       error = (e as Error).message;
     } finally {

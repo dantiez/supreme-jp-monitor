@@ -66,7 +66,16 @@ export async function loadKnownVariants(): Promise<Map<string, KnownVariant>> {
  * `first_seen_at` is preserved on conflict; `last_seen_at` always advances, so
  * the pair answers "when did this appear" and "is it still listed".
  */
-export async function saveProduct(product: ScrapedProduct): Promise<void> {
+/**
+ * @param initialise Seed the watch list from THIS scan instead of carrying the
+ *   previous one forward. Used by "Khởi tạo danh sách", where the point is that
+ *   what is in stock right now becomes the baseline -- so it shows as "still in
+ *   stock" rather than as several hundred new products.
+ */
+export async function saveProduct(
+  product: ScrapedProduct,
+  initialise = false
+): Promise<void> {
   await withTransaction(async (client) => {
     await client.query(
       `INSERT INTO supreme_monitor.products (handle, external_id, name, color, style, category, image_url, url, last_seen_at)
@@ -97,15 +106,28 @@ export async function saveProduct(product: ScrapedProduct): Promise<void> {
 
     for (const variant of product.variants) {
       await client.query(
-        `INSERT INTO supreme_monitor.variants (handle, size, sku, price, currency, status, last_checked_at)
-         VALUES ($1,$2,$3,$4,$5,$6, now())
+        `INSERT INTO supreme_monitor.variants (handle, size, sku, price, currency, status, previous_status, last_checked_at)
+         VALUES ($1,$2,$3,$4,$5,$6, CASE WHEN $7 THEN $6 ELSE NULL END, now())
          ON CONFLICT (handle, size) DO UPDATE SET
            sku             = EXCLUDED.sku,
            price           = EXCLUDED.price,
            currency        = EXCLUDED.currency,
+           -- Reads the row as it stands BEFORE this statement, which is exactly
+           -- the previous scan's answer. Assignment order does not affect it:
+           -- every right-hand side sees the old row.
+           previous_status = CASE WHEN $7 THEN EXCLUDED.status
+                                  ELSE supreme_monitor.variants.status END,
            status          = EXCLUDED.status,
            last_checked_at = now()`,
-        [product.handle, variant.size, variant.sku, variant.price, variant.currency, variant.status]
+        [
+          product.handle,
+          variant.size,
+          variant.sku,
+          variant.price,
+          variant.currency,
+          variant.status,
+          initialise
+        ]
       );
     }
   });
@@ -174,6 +196,8 @@ export interface DashboardRow {
   price: number | null;
   currency: string | null;
   status: string;
+  /** What this size was at the previous scan. Null means it was not tracked. */
+  previous_status: string | null;
   url: string;
   delisted_at: string | null;
   latest_event: string | null;
@@ -192,7 +216,12 @@ export async function loadDashboardRows(filters: {
   category?: string;
   limit?: number;
 } = {}): Promise<DashboardRow[]> {
-  const where: string[] = [];
+  // Products withdrawn from the site are never stock. Left in, they appear as
+  // buyable -- and under the watch-list grouping they arrive as "sản phẩm mới",
+  // because the scan no longer touches them so their baseline stays null. The
+  // rows are kept in the table (history depends on them); they are just not
+  // offered as something to sell.
+  const where: string[] = ['p.delisted_at IS NULL'];
   const params: unknown[] = [];
 
   if (filters.status) {
@@ -212,7 +241,7 @@ export async function loadDashboardRows(filters: {
 
   const res = await query<DashboardRow>(
     `SELECT p.handle, p.name, p.color, p.category, p.image_url, v.size, v.sku, v.price, v.currency,
-            v.status, p.url, p.delisted_at, latest.event AS latest_event,
+            v.status, v.previous_status, p.url, p.delisted_at, latest.event AS latest_event,
             latest.detected_at AS latest_event_at,
             v.first_seen_at, v.last_checked_at
        FROM supreme_monitor.variants v
