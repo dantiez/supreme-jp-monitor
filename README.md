@@ -67,7 +67,7 @@ npm run dev                    # dashboard on http://127.0.0.1:3100
 | `npm run scan -- --init` | Seed the watch list from this scan |
 | `npm run scan -- --collections=new` | Choose the listing to discover from |
 | `npm run dev` | Dashboard + export, on 127.0.0.1 only |
-| `npm test` | Vitest: 121 tests |
+| `npm test` | Vitest: 125 tests |
 | `npm run lint` | `tsc --noEmit` |
 
 ---
@@ -196,7 +196,11 @@ Columns: `Product Name · Product URL · Category · Color · Size · SKU · Pri
 
 ## Known gaps
 
-- **Supreme rotates its product handles, and tracking is keyed on them.** Observed on 2026-08-28: every handle in the catalogue 404'd and the same products reappeared under new ones, so one scan recorded 268 DELISTED and 267 NEW_PRODUCT for a shop that had changed almost nothing. It resets the watch list, floods Discord, and loses restock history across the rotation. `variants.sku` (`FW26SH1-ORA-S` -- season, style, colour, size) survives it and is the obvious key to move to. NOT FIXED.
+- **The storefront follows the caller's IP, and each storefront renames every product.** Diagnosed 2026-08-28. A scan from Singapore is served the SGD store, whose handles differ from the JPY store's for the same garments; since tracking is keyed on the handle, that run withdrew all 268 Japanese products and recorded 267 arrivals. The next run from elsewhere did the reverse. The data said it plainly once looked at: 996 rows in JPY all marked withdrawn, 995 in SGD all marked live.
+
+  No request-level control exists -- verified against the live site that `/ja/` and `/en-jp/` 404, and that `?country=JP`, `Accept-Language` and a `cart_currency` cookie are all ignored.
+
+  **The scan now refuses a foreign storefront instead of recording it**, which stops the corruption but does not obtain the right store. **Render has no Tokyo region, so no Render deploy can scan.** Serving the dashboard from Render is fine; the scan has to run where the JP store is reachable (a Tokyo-region host such as Fly.io `nrt`, or the owner's own machine). Unresolved.
 
 - **A scan is two requests, not 268.** The listing embeds `products-json`: every product with every size and its stock flag, verified field-for-field against the individual product pages. Page one holds 250, page two the remaining 18. The site declares its own total (`allProductsCount`) and the run fails if fewer are read, so a short scan cannot pass as a complete one.
 - **Times are displayed in Tokyo, stored in UTC.** `timestamptz` holds an absolute instant; only the reading is localised. Set `DISPLAY_TIMEZONE` (e.g. `Asia/Ho_Chi_Minh`) to change the frame. The zone is named in the dashboard and in the export headers so a timestamp is never ambiguous.
